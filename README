@@ -1,4 +1,4 @@
-Stupy, An Template Engine Extension for PHP
+Stupy, A Template Engine Extension for PHP
 
 简介
     Stupy是一个C语言开发的PHP模板引擎。
@@ -12,7 +12,8 @@ Stupy, An Template Engine Extension for PHP
     Stupy的词、语法分析基于Zend Compiler，View类的封装基于Yaf的Yaf_Simple_View
 
 下载
-	git clone https://github.com/fallgold/stupy.git
+	https://github.com/fallgold/stupy/archive/v1.0.0.zip
+	开发版：git clone https://github.com/fallgold/stupy.git
     目前仅支持php 5.3, 5.4
     暂无Windows版本
     Stupy经过充分的单元测试，内存泄露检测及线上环境验证，当前版本为1.0.0 beta版
