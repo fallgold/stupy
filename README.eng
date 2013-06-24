@@ -1,31 +1,31 @@
 Stupy, A Template Engine Extension for PHP
 
 Introduction
-	Stupy is a template engine for php written as c-extension.
+    Stupy is a template engine for php written as c-extension.
 
 Main Features
-	1. Stupy generate opcode directly, simple and efficient
-	2. Template syntax is consistent with php
-	3. Compatible with basic Smarty
+    1. Stupy generate opcode directly, simple and efficient
+    2. Template syntax is consistent with php
+    3. Compatible with basic Smarty
 
 Annoucement
-	Stupy's lexer and parser is based on Zend Compiler
-	The view class is based on Yaf_Simple_View of Yaf
+    Stupy's lexer and parser is based on Zend Compiler
+    The view class is based on Yaf_Simple_View of Yaf
 
 Download
-	https://github.com/fallgold/stupy/archive/v1.0.0.zip
-	Latest：git clone https://github.com/fallgold/stupy.git
+    https://github.com/fallgold/stupy/archive/v1.0.0.zip
+    Latest：git clone https://github.com/fallgold/stupy.git
     Currently, Stupy only support php 5.3, 5.4, and no windows version.
-	Stupy is tested sufficiently, memory leak detected and been verified on product environment, the first and newest release version is 1.0.0 beta.
+    Stupy is tested sufficiently, memory leak detected and been verified on product environment, the first and newest release version is 1.0.0 beta.
 
 Installation
-	If you have been compiled another php extension, then Stupy is similar, if not, please take it easy, very simple:
+    If you have been compiled another php extension, then Stupy is similar, if not, please take it easy, very simple:
     cd stupy-1.0.0
     phpize
     ./configure
     make 
     make install
-	and then add extension=stupy.so in the php.ini, then restart php
+    and then add extension=stupy.so in the php.ini, then restart php
 
 Quick Start
     php :
@@ -70,17 +70,17 @@ Template Syntax
     main.tpl:
         aa{* comment here *}bb    {* template comment *}
         {$n}                      {* print a variable, the left and right 
-									 delimiter of Stupy is { and }, and cannot redefined *}
+                                     delimiter of Stupy is { and }, and cannot redefined *}
         {$arr[0]}                 {* print a element of array *}
         {$arr["key1"]}
         {$arr.key2}               {* .(dot) is use for element reference in Stupy,
-										instead of string concatenation
-										this is different from php *}
+                                        instead of string concatenation
+                                        this is different from php *}
         {literal}{$a}{if}{/literal} {* contents between literal are not parsed *}
         {lit}{$b}{else}{/lit}     {* shorthand of literal *}
         {ldelim}ccc{rdelim}       {* print the delimiter itself *}
         {   ldelim}               {* empty character is not allowed after left delim, 
-									 or it will be parsed as plain text *}
+                                     or it will be parsed as plain text *}
 
     output:
         aabb 
@@ -129,10 +129,10 @@ Template Syntax
         {foreach ($arr as $key => $item)}   {* branckets can be omitted *}
             item-{$key}-{$item} 
         {else}
-			{* you can use else for a foreach, 
-				if $arr is equal to false, 
-				then output 'arr is empty' in current context 
-			*}
+            {* you can use else for a foreach, 
+                if $arr is equal to false, 
+                then output 'arr is empty' in current context 
+            *}
             arr is empty
         {/foreach}
     
@@ -144,7 +144,7 @@ Template Syntax
 5. for 
     main.tpl:
         {for ($i = 0; $i < 3; $i++)}      {* branckets can not be omitted
-											 there is no else statement *}
+                                             there is no else statement *}
             $i({$i}) say hi to his little brother $j
         {/for}
 
@@ -158,10 +158,10 @@ Template Syntax
         {for ($key => $item in $arr)}     {* branckets can be omitted *}
             item-{$key}-{$item} 
         {else}
-			{* you can use else for a for-in, 
-				if $arr is equal to false, 
-				then output 'arr is empty' in current context 
-			*}
+            {* you can use else for a for-in, 
+                if $arr is equal to false, 
+                then output 'arr is empty' in current context 
+            *}
             arr is empty
         {/for}
     
@@ -172,17 +172,17 @@ Template Syntax
 
 7. modifier
     modifier is function call with the form of pipeline
-		function name at right of |, param1 at left of | 
-		param2, param3 ... append to the function name separated by a colon
+        function name at right of |, param1 at left of | 
+        param2, param3 ... append to the function name separated by a colon
     Stupy system modifers: default, e, df 
     
     a). system modifier
         main.tpl:
             {$a|default:"aaaaa"}         {* if param1($a in current context) is empty 
-									   		then output the param2("aaaaa" in current 
-									   		context) of the modifier *}
+                                               then output the param2("aaaaa" in current 
+                                               context) of the modifier *}
             {$a|default:aaaaa}           {* the Stupy modifier param parse an constant as a string,
-									   		it means quotes can be omitted *}
+                                               it means quotes can be omitted *}
         output:
             aaaaa 
             aaaaa 
@@ -191,7 +191,7 @@ Template Syntax
             {? $s = "<html>'\"</html>"}
             {$s|e}                       {* means: htmlentities($s, ENT_QUOTES, "UTF-8"); *}
             {? $flag = ENT_NOQUOTES}     {* the Stupy modifier param parse an constant as a string,
-									   	    so we need a variable for arg pass throught *}
+                                               so we need a variable for arg pass throught *}
             {$s|e:$flag:"UTF-8"}         {* means: htmlentities($s, $flag, "UTF-8"); *}
         output:
             &lt;html&gt;&#039;&quot;&lt;/html&gt;
@@ -220,45 +220,45 @@ Template Syntax
             
     c). user define modifier
         .e.g {$arr|mod1:aaa:bbb}
-		you need to provide a function name mod1 or stupy_mod_mod1.
+        you need to provide a function name mod1 or stupy_mod_mod1.
         prototype:
-			function stupy_mod_mod1($param1, $param2, $param3) {
-				// $param1,$param2,$param3 will in turn receive $arr, "aaa", "bbb"
-			}
+            function stupy_mod_mod1($param1, $param2, $param3) {
+                // $param1,$param2,$param3 will in turn receive $arr, "aaa", "bbb"
+            }
         return:
-			if it's not multi modifier or current modifier is at far right
-			the return will be print,
-			otherwise, the return use as param1 of next modifier(its right one)
+            if it's not multi modifier or current modifier is at far right
+            the return will be print,
+            otherwise, the return use as param1 of next modifier(its right one)
         autoload:
-			if the function is not exist while Stupy parsing,
-			Stupy will try autoload according to the static options configure,
-			please refer to the static options described at the end, 
-			tpl_mod_pattern and tpl_mod_file_pattern.
+            if the function is not exist while Stupy parsing,
+            Stupy will try autoload according to the static options configure,
+            please refer to the static options described at the end, 
+            tpl_mod_pattern and tpl_mod_file_pattern.
 
 8. function
-	The function call. Stupy does not provide system function, it is only for extending.
+    The function call. Stupy does not provide system function, it is only for extending.
     .e.g {funca p1="1111" p2="2222" p3="3333"}
-	you need to provide a function name funca or stupy_mod_funca
+    you need to provide a function name funca or stupy_mod_funca
     prototype:
-		function stupy_mod_funca($p) {
-			// $p receive array("p1" => "1111", "p2" => "2222", "p3" => "3333")
-		}
+        function stupy_mod_funca($p) {
+            // $p receive array("p1" => "1111", "p2" => "2222", "p3" => "3333")
+        }
     return:
-		the return will be print
-	autoload:
-		the same as user define modifier
+        the return will be print
+    autoload:
+        the same as user define modifier
     Advance: 
         Stupy's template syntax is consistent with php, 
-		the function param inherits the flexibility of PHP array, 
-		so you can call it like this:
+        the function param inherits the flexibility of PHP array, 
+        so you can call it like this:
             {funca "1111" "2222" "3333"} 
-			// $p rece array("1111", "2222", "3333" )
-		or:
+            // $p rece array("1111", "2222", "3333" )
+        or:
             {funca "1111" p2="2222" "3333"} 
-			// $p rece array("1111", "p2" => "2222", "3333" )
+            // $p rece array("1111", "p2" => "2222", "3333" )
     Notice: you can call a php function like a Stupy function, but it is deprecated.
         For example: {count $arr} print 1, rather than 3, because of count receive array($arr).
-		In this case, use basics syntax {count($arr)}, or modifier syntax {$arr|count}
+        In this case, use basics syntax {count($arr)}, or modifier syntax {$arr|count}
 
 9. tag
     tag's invocation same as function, it can be considered a special type of function, this type of function does not require a calculation same as the usual sense, it is just some sub-template parsing.
@@ -281,21 +281,21 @@ Template Syntax
         StupyTpl::setTag(tag_name, tag_content);
         similar to the function，the sub-tpl(tag_content) will receive $p
         For example:
-			system tag js is equivalent to:
+            system tag js is equivalent to:
             StupyTpl::setTag('js', '<script language="javascript" src="{$p[0]}"></script>');
-			system tag options is equivalent to:
+            system tag options is equivalent to:
             StupyTpl::setTag('js', '{foreach $p[0] as $k => $v}
                     <option value="{$k}"{if $p[1] == $k} selected="selected"{/if}>{$v}</option>
                 {/foreach}');
 
     c). user define system tag
         system tag are inited while php is loading, 
-		these tags inited only one time but not every request.
+        these tags inited only one time but not every request.
         aa). set in php.ini: stupy.tpl_tags = /path/stupy_tags.tpl
-		bb). the tags file format please refer to tests/plugins/stupy_tags.tpl, in the source directory.
+        bb). the tags file format please refer to tests/plugins/stupy_tags.tpl, in the source directory.
     
-	Notice: tag takes precedence over function, if both are defined with the same name, this name parse as tag.
-			user define tag must be defined before the stupy parsing, if not, according to the priority, we will find the same name function, if function no exist, then try the function autoload.
+    Notice: tag takes precedence over function, if both are defined with the same name, this name parse as tag.
+            user define tag must be defined before the stupy parsing, if not, according to the priority, we will find the same name function, if function no exist, then try the function autoload.
 
 10. include
     header.tpl:
@@ -314,56 +314,56 @@ Template Syntax
         footer footer footer
 
 11. function-t-z
-	function-t-z is another special type of function, the function name is only one character from t to z.
-	unlike common function, function-t-z not parse param, all the characters after the function name will be passed as a param.
-	function-t-z design for language translation, as well as for the interface of parser.
-	function-t-z takes precedence over function and tag.
+    function-t-z is another special type of function, the function name is only one character from t to z.
+    unlike common function, function-t-z not parse param, all the characters after the function name will be passed as a param.
+    function-t-z design for language translation, as well as for the interface of parser.
+    function-t-z takes precedence over function and tag.
 
 12. static options
-	Stupy provides several run-time config, all are static option for the global StupyTpl class, but not a certain instance.
+    Stupy provides several run-time config, all are static option for the global StupyTpl class, but not a certain instance.
     StupyTpl::setStaticOption(option_name, option_value);
     all options：
         tpl_mod_pattern, string
-			default: stupy_mod_%s
+            default: stupy_mod_%s
             the pattern of user define modifier/function's function name, must contain(at most) a %s，used to fill the mod name
 
         tpl_mod_file_pattern, string
-			default: {currently executing php script directory}/stupy_mod_%s.php
+            default: {currently executing php script directory}/stupy_mod_%s.php
             the pattern of user define modifier/function's file name, must contain(at most) a %s，used to fill the mod name
 
         tpl_opti_spaces, int
-			default: 0
-			whether to optimize the extra spaces automately.
+            default: 0
+            whether to optimize the extra spaces automately.
 
         tpl_include_dir, string
-			default: {currently parsing template file directory}
+            default: {currently parsing template file directory}
             the path that 'include' use for load.
-			tpl_include_dir will be synchronized to the same path while StupyTpl::setScriptPath() 
+            tpl_include_dir will be synchronized to the same path while StupyTpl::setScriptPath() 
 
         tpl_include_extend, int
-			default: 1
+            default: 1
             include mode (0: include, 1: check+warning, 2: check, 3: extend)
-			if no opcode cache module is enabled, this flag is useless
-			or, when sub tpl is modified after cached, we have to choice to use the cache or use a include command to recompiled sub tpl.
-					include means sub tpl use php include, compile every time.
-					extend means sub tpl compiled into top tpl, then they all be cached.
-					check means we will compare the mtime at every request, if the cache is expired then force include (a warning triggered, if tpl_include_extend is 1).
+            if no opcode cache module is enabled, this flag is useless
+            or, when sub tpl is modified after cached, we have to choice to use the cache or use a include command to recompiled sub tpl.
+                    include means sub tpl use php include, compile every time.
+                    extend means sub tpl compiled into top tpl, then they all be cached.
+                    check means we will compare the mtime at every request, if the cache is expired then force include (a warning triggered, if tpl_include_extend is 1).
             Efficency: extend > check > include
             Notice: In the case of opcode cache is enabled, it may be necessary to restart the php when you modify this option.
-					For example, tpl_include_extend is 3 before modified, and the sub tpl is already cached, regardless of what value the tpl_include_extend be modified to, we will always get the cache before we restart php.
+                    For example, tpl_include_extend is 3 before modified, and the sub tpl is already cached, regardless of what value the tpl_include_extend be modified to, we will always get the cache before we restart php.
 
         use_request_time, int
-			default: 1
-			Whether use the sapi's request time instead of time()
+            default: 1
+            Whether use the sapi's request time instead of time()
 
         tpl_suppress, int
-			default: E_NOTICE
-			php error type to be suppressed
+            default: E_NOTICE
+            php error type to be suppressed
 
         tpl_tag_symbol, int
-			default: 1
+            default: 1
             whether use seperate symbol table while tag_content excuting
 
 13. BUGS
-	a. In php5.3, use ob_start in tpl while render or eval(in {??} or a function), will cause the output exception.
-	
+    a. In php5.3, use ob_start in tpl while render or eval(in {??} or a function), will cause the output exception.
+    
