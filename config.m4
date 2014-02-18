@@ -39,9 +39,11 @@ if test "$PHP_STUPY" != "no"; then
 	  zend=Zend53
   elif test "$yaf_php_version" -lt "5005000"; then
 	  zend=Zend54
+  elif test "$yaf_php_version" -lt "5006000"; then
+	  zend=Zend55
   else
 	AC_MSG_RESULT([zend engine is too new, it may not work])
-	  zend=Zend54
+	  zend=Zend55
   fi
   PHP_ADD_INCLUDE("$zend")
   PHP_NEW_EXTENSION(stupy, stupy.c $zend/stupy_compile.c tpl.c, $ext_shared)
