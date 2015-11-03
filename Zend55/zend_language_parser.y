@@ -381,6 +381,12 @@ tpl_inner_tpl_attr_list:
 	|	tpl_inner_tpl_attr_list tpl_inner_tpl_attr_anony { zend_do_add_array_element(&$$, &$2, NULL, 0 TSRMLS_CC); }
 ;
 
+tpl_encaps_list:
+		T_CONSTANT_ENCAPSED_STRING { $$ = $1; }
+	|	T_ENCAPSED_AND_WHITESPACE { $$ = $1; }
+	|	encaps_list	{ $$ = $1; }
+;
+
 tpl_statement:
 		/** {$a};  echo $a;
 			{"string"|modifier}; echo modifier("string");
@@ -402,20 +408,20 @@ tpl_statement:
 	|	T_START_TPL_WITH_SCRIPT inner_statement_list T_END_TPL { $$ = $2; } /* {? xxx} means <?php xxx?> */
 	|	T_TPL_INCLUDE expr T_END_TPL { tpl_do_include(&$$, &$2 TSRMLS_CC); } /* {include file} */
 	|	T_TPL_INCLUDE T_ATTR_FILE '=' expr T_END_TPL { tpl_do_include(&$$, &$4 TSRMLS_CC); } /* {include file="xxx"} */
-	/* function t-z */
-	|	T_START_TPL_TRANSLATE T_CONSTANT_ENCAPSED_STRING T_END_TPL { int is_dynamic = zend_do_begin_function_call(&$1, 1 TSRMLS_CC); 
+	/* function rst, xyz */
+	|	T_START_TPL_TRANSLATE tpl_encaps_list T_END_TPL { int is_dynamic = zend_do_begin_function_call(&$1, 1 TSRMLS_CC);
 			zend_do_pass_param(&$2, ZEND_SEND_VAL, 1 TSRMLS_CC); Z_LVAL($3.u.constant) = 1;
 			zend_do_end_function_call(&$1, &$$, &$3, 0, is_dynamic TSRMLS_CC); zend_do_extended_fcall_end(TSRMLS_C); zend_do_echo(&$$ TSRMLS_CC); }
 	/* function & tag */
 	|	T_START_TPL T_STRING tpl_inner_tpl_attr_list T_END_TPL { tpl_do_function(&$$, &$2, &$3, &$1 TSRMLS_CC); }
 	/* foreach */
-	|	T_START_TPL T_FOREACH '(' expr T_AS { znode dummy_var; tpl_do_assign(&dummy_var, &$4 TSRMLS_CC); zend_do_if_cond(&dummy_var, &$1 TSRMLS_CC); zend_do_foreach_begin(&$2, &$3, &dummy_var, &$5, 0 TSRMLS_CC); }
+	|	T_START_TPL T_FOREACH '(' expr T_AS { znode dummy_var; tpl_do_assign(&dummy_var, &$4 TSRMLS_CC); ZVAL_LONG(&$$.u.constant, STU_G(tpl_assign_idx)); zend_do_if_cond(&dummy_var, &$1 TSRMLS_CC); tpl_do_foreach_i_init(Z_LVAL($$.u.constant) TSRMLS_CC); zend_do_foreach_begin(&$2, &$3, &dummy_var, &$5, 0 TSRMLS_CC); }
 			foreach_variable foreach_optional_arg ')' T_END_TPL { zend_do_foreach_cont(&$2, &$3, &$5, &$7, &$8 TSRMLS_CC); }
-			tpl_block T_START_TPL { zend_do_foreach_end(&$2, &$5 TSRMLS_CC); zend_do_if_after_statement(&$1, 1 TSRMLS_CC); }
+			tpl_block T_START_TPL { tpl_do_foreach_i_inc(TSRMLS_CC); zend_do_foreach_end(&$2, &$5 TSRMLS_CC); tpl_do_foreach_i_end(Z_LVAL($6.u.constant) TSRMLS_CC); zend_do_if_after_statement(&$1, 1 TSRMLS_CC); }
 		tpl_loopelse '/' T_FOREACH T_END_TPL { zend_do_if_end(TSRMLS_C); }
 	|	T_START_TPL T_FOREACH expr T_AS foreach_variable foreach_optional_arg T_END_TPL 
-			{ znode dummy_var; tpl_do_assign(&dummy_var, &$3 TSRMLS_CC); zend_do_if_cond(&dummy_var, &$7 TSRMLS_CC); zend_do_foreach_begin(&$2, &$1, &dummy_var, &$4, 0 TSRMLS_CC); zend_do_foreach_cont(&$2, &$1, &$4, &$5, &$6 TSRMLS_CC); }
-			tpl_block T_START_TPL { zend_do_foreach_end(&$2, &$4 TSRMLS_CC); zend_do_if_after_statement(&$7, 1 TSRMLS_CC); }
+			{ znode dummy_var; tpl_do_assign(&dummy_var, &$3 TSRMLS_CC); ZVAL_LONG(&$$.u.constant, STU_G(tpl_assign_idx)); zend_do_if_cond(&dummy_var, &$7 TSRMLS_CC); tpl_do_foreach_i_init(Z_LVAL($$.u.constant) TSRMLS_CC); zend_do_foreach_begin(&$2, &$1, &dummy_var, &$4, 0 TSRMLS_CC); zend_do_foreach_cont(&$2, &$1, &$4, &$5, &$6 TSRMLS_CC); }
+			tpl_block T_START_TPL { tpl_do_foreach_i_inc(TSRMLS_CC); zend_do_foreach_end(&$2, &$4 TSRMLS_CC); tpl_do_foreach_i_end(Z_LVAL($8.u.constant) TSRMLS_CC); zend_do_if_after_statement(&$7, 1 TSRMLS_CC); }
 		tpl_loopelse '/' T_FOREACH T_END_TPL { zend_do_if_end(TSRMLS_C); }
 	/* if */
 	|	T_START_TPL T_IF expr T_END_TPL { zend_do_if_cond(&$3, &$3 TSRMLS_CC); } 

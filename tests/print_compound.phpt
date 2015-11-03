@@ -4,6 +4,7 @@ Check for expr printing
 <?php if (!extension_loaded("stupy")) print "skip"; ?>
 --FILE--
 <?php 
+date_default_timezone_set("Asia/Shanghai");
 define("CCC", 'cccccc');
 class CA {
 	const AA = "const-aa";

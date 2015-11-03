@@ -4,6 +4,7 @@ Check for modifier
 <?php if (!extension_loaded("stupy")) print "skip"; ?>
 --FILE--
 <?php 
+date_default_timezone_set("Asia/Shanghai");
 StupyTpl::setStaticOption('tpl_mod_file_pattern', dirname(__FILE__).'/plugins/stupy_mod_%s.php');
 StupyTpl::setStaticOption('tpl_opti_spaces', 0);
 $view = new StupyTpl();

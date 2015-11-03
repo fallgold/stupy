@@ -23,7 +23,40 @@
 
 /* zend.c */
 
+#if defined(__GNUC__) && __GNUC__ >= 3 && !defined(__INTEL_COMPILER) && !defined(DARWIN) && !defined(__hpux) && !defined(_AIX) && !             defined(__osf__)
+void zend_error_noreturn(int type, const char *format, ...) __attribute__ ((alias("zend_error"),noreturn));
+#endif
+
 #define zend_vspprintf vspprintf
+
+#define SAVE_STACK(stack) do { \
+		if (CG(stack).top) { \
+			memcpy(&stack, &CG(stack), sizeof(zend_stack)); \
+			CG(stack).top = CG(stack).max = 0; \
+			CG(stack).elements = NULL; \
+		} else { \
+			stack.top = 0; \
+		} \
+	} while (0)
+
+#define RESTORE_STACK(stack) do { \
+		if (stack.top) { \
+			zend_stack_destroy(&CG(stack)); \
+			memcpy(&CG(stack), &stack, sizeof(zend_stack)); \
+		} \
+	} while (0)
+
+int zend_spprintf(char **message, int max_len, const char *format, ...) /* {{{ */
+{
+	va_list arg;
+	int len;
+
+	va_start(arg, format);
+	len = zend_vspprintf(message, max_len, format, arg);
+	va_end(arg);
+	return len;
+}
+/* }}} */
 
 ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 {
@@ -111,6 +144,7 @@ ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 	}
 
 #ifdef HAVE_DTRACE
+/*
 	if(DTRACE_ERROR_ENABLED()) {
 		char *dtrace_error_buffer;
 		va_start(args, format);
@@ -119,6 +153,7 @@ ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 		efree(dtrace_error_buffer);
 		va_end(args);
 	}
+*/
 #endif /* HAVE_DTRACE */
 
 	va_start(args, format);
@@ -395,8 +430,121 @@ void zend_verify_abstract_class(zend_class_entry *ce TSRMLS_DC) /* {{{ */
 }
 /* }}} */
 
+#include "zend_vm.h"
+void execute_new_code(TSRMLS_D) /* {{{ */
+{
+	zend_op *opline, *end;
+	zend_op *ret_opline;
+	int orig_interactive;
+
+	if (!(CG(active_op_array)->fn_flags & ZEND_ACC_INTERACTIVE)
+		|| CG(context).backpatch_count>0
+		|| CG(active_op_array)->function_name
+		|| CG(active_op_array)->type!=ZEND_USER_FUNCTION) {
+		return;
+	}
+
+	ret_opline = get_next_op(CG(active_op_array) TSRMLS_CC);
+	ret_opline->opcode = ZEND_RETURN;
+	ret_opline->op1_type = IS_CONST;
+	ret_opline->op1.constant = zend_add_literal(CG(active_op_array), &EG(uninitialized_zval) TSRMLS_CC);
+	SET_UNUSED(ret_opline->op2);
+
+	if (!EG(start_op)) {
+		EG(start_op) = CG(active_op_array)->opcodes;
+	}
+
+	opline=EG(start_op);
+	end=CG(active_op_array)->opcodes+CG(active_op_array)->last;
+
+	while (opline<end) {
+		if (opline->op1_type == IS_CONST) {
+			opline->op1.zv = &CG(active_op_array)->literals[opline->op1.constant].constant;
+		}
+		if (opline->op2_type == IS_CONST) {
+			opline->op2.zv = &CG(active_op_array)->literals[opline->op2.constant].constant;
+		}
+		switch (opline->opcode) {
+			case ZEND_GOTO:
+				if (Z_TYPE_P(opline->op2.zv) != IS_LONG) {
+					zend_resolve_goto_label(CG(active_op_array), opline, 1 TSRMLS_CC);
+				}
+				/* break omitted intentionally */
+			case ZEND_JMP:
+				opline->op1.jmp_addr = &CG(active_op_array)->opcodes[opline->op1.opline_num];
+				break;
+			case ZEND_JMPZ:
+			case ZEND_JMPNZ:
+			case ZEND_JMPZ_EX:
+			case ZEND_JMPNZ_EX:
+			case ZEND_JMP_SET:
+			case ZEND_JMP_SET_VAR:
+				opline->op2.jmp_addr = &CG(active_op_array)->opcodes[opline->op2.opline_num];
+				break;
+		}
+		ZEND_VM_SET_OPCODE_HANDLER(opline);
+		opline++;
+	}
+
+	zend_release_labels(1 TSRMLS_CC);
+
+	EG(return_value_ptr_ptr) = NULL;
+	EG(active_op_array) = CG(active_op_array);
+	orig_interactive = CG(interactive);
+	CG(interactive) = 0;
+	zend_execute(CG(active_op_array) TSRMLS_CC);
+	CG(interactive) = orig_interactive;
+
+	if (EG(exception)) {
+		zend_exception_error(EG(exception), E_ERROR TSRMLS_CC);
+	}
+
+	CG(active_op_array)->last -= 1;	/* get rid of that ZEND_RETURN */
+	EG(start_op) = CG(active_op_array)->opcodes+CG(active_op_array)->last;
+}
+/* }}} */
+
 /*  end zend_execute_API.c  */
 
+
+/*  zend_list.c  */
+
+static HashTable list_destructors; // ????
+
+int zend_init_rsrc_list(TSRMLS_D)
+{
+	if (zend_hash_init(&EG(regular_list), 0, NULL, list_entry_destructor, 0)==SUCCESS) {
+		EG(regular_list).nNextFreeElement=1;	/* we don't want resource id 0 */
+		return SUCCESS;
+	} else {
+		return FAILURE;
+	}
+}
+
+void list_entry_destructor(void *ptr)
+{
+	zend_rsrc_list_entry *le = (zend_rsrc_list_entry *) ptr;
+	zend_rsrc_list_dtors_entry *ld;
+	TSRMLS_FETCH();
+	
+	if (zend_hash_index_find(&list_destructors, le->type, (void **) &ld)==SUCCESS) {
+		switch (ld->type) {
+			case ZEND_RESOURCE_LIST_TYPE_STD:
+				if (ld->list_dtor) {
+					(ld->list_dtor)(le->ptr);
+				}
+				break;
+			case ZEND_RESOURCE_LIST_TYPE_EX:
+				if (ld->list_dtor_ex) {
+					ld->list_dtor_ex(le TSRMLS_CC);
+				}
+				break;
+			EMPTY_SWITCH_DEFAULT_CASE()
+		}
+	} else {
+		zend_error(E_WARNING,"Unknown list entry type in request shutdown (%d)", le->type);
+	}
+}
 
 
 /*

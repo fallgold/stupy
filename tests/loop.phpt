@@ -92,6 +92,33 @@ empty
 {else}empty
 {/for}
 
+{* more test add @20141104 *}
+{? $a = array(); ?}
+{? $b = [1,2]; ?}
+{foreach $a as $item}
+	b is empty
+	a is:
+	{$foreach_i}. 000-{$item}
+{else}
+	a is empty
+	b is:
+	{foreach $b as $item}
+		{$foreach_i}. 000-{$item}
+	{/foreach}
+{/foreach}
+
+{? $b = array(); ?}
+{? $a = [1,2]; ?}
+{foreach $a as $item}
+	{$foreach_i}. 000-{$item}
+{else}
+	a is empty
+	b is:
+	{foreach $b as $item}
+		{$foreach_i}. 000-{$item}
+	{/foreach}
+{/foreach}
+
 
 TPL
 );
@@ -126,4 +153,10 @@ aaa
 aaa
 ddd
 ddd
+
+
+	a is empty
+	b is:
+			0. 000-1			1. 000-2	
+	0. 000-1	1. 000-2
 

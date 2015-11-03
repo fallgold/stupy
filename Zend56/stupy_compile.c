@@ -20,9 +20,10 @@
 #include "zend_language_parser.c"
 #include "zend_language_scanner.c"
 
-/* zend.c */
 
-#if defined(__GNUC__) && __GNUC__ >= 3 && !defined(__INTEL_COMPILER) && !defined(DARWIN) && !defined(__hpux) && !defined(_AIX) && !             defined(__osf__)
+/************************* zend.c *************************/
+
+#if defined(__GNUC__) && __GNUC__ >= 3 && !defined(__INTEL_COMPILER) && !defined(DARWIN) && !defined(__hpux) && !defined(_AIX) && !defined(__osf__)
 void zend_error_noreturn(int type, const char *format, ...) __attribute__ ((alias("zend_error"),noreturn));
 #endif
 
@@ -38,6 +39,7 @@ void zend_error_noreturn(int type, const char *format, ...) __attribute__ ((alia
 		} \
 	} while (0)
 
+
 #define RESTORE_STACK(stack) do { \
 		if (stack.top) { \
 			zend_stack_destroy(&CG(stack)); \
@@ -45,16 +47,6 @@ void zend_error_noreturn(int type, const char *format, ...) __attribute__ ((alia
 		} \
 	} while (0)
 
-int zend_spprintf(char **message, int max_len, char *format, ...) /* {{{ */
-{
-	va_list arg;
-	int len;
-
-	va_start(arg, format);
-	len = zend_vspprintf(message, max_len, format, arg);
-	va_end(arg);
-	return len;
-}
 
 ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 {
@@ -141,18 +133,18 @@ ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 		error_filename = "Unknown";
 	}
 
-	va_start(args, format);
-
 #ifdef HAVE_DTRACE
-/*
 	if(DTRACE_ERROR_ENABLED()) {
 		char *dtrace_error_buffer;
+		va_start(args, format);
 		zend_vspprintf(&dtrace_error_buffer, 0, format, args);
-		DTRACE_ERROR(dtrace_error_buffer, error_filename, error_lineno);
+		DTRACE_ERROR(dtrace_error_buffer, (char *)error_filename, error_lineno);
 		efree(dtrace_error_buffer);
+		va_end(args);
 	}
-*/
 #endif /* HAVE_DTRACE */
+
+	va_start(args, format);
 
 	/* if we don't have a user defined error handler */
 	if (!EG(user_error_handler)
@@ -233,7 +225,7 @@ ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 			 * such scripts recursivly, but some CG() variables may be
 			 * inconsistent. */
 
-			in_compilation = zend_is_compiling(TSRMLS_C);
+			in_compilation = CG(in_compilation);
 			if (in_compilation) {
 				saved_class_entry = CG(active_class_entry);
 				CG(active_class_entry) = NULL;
@@ -245,6 +237,7 @@ ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 				SAVE_STACK(declare_stack);
 				SAVE_STACK(list_stack);
 				SAVE_STACK(context_stack);
+				CG(in_compilation) = 0;
 			}
 
 			if (call_user_function_ex(CG(function_table), NULL, orig_user_error_handler, &retval, 5, params, 1, NULL TSRMLS_CC) == SUCCESS) {
@@ -269,6 +262,7 @@ ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 				RESTORE_STACK(declare_stack);
 				RESTORE_STACK(list_stack);
 				RESTORE_STACK(context_stack);
+				CG(in_compilation) = 1;
 			}
 
 			if (!EG(user_error_handler)) {
@@ -302,17 +296,32 @@ ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 }
 /* }}} */
 
-/* this should be compatible with the standard zenderror */
-void zenderror(char *error) /* {{{ */
+#ifdef zenderror
+#undef zenderror
+#endif
+
+void zenderror(const char *error) /* {{{ */
 {
 	zend_error(E_PARSE, "%s", error);
 }
 /* }}} */
 
-/*  end zend.c  */
+
+/************************* zend_exceptions.c *************************/
 
 
-/*  zend_opcode.c  */
+int zend_spprintf(char **message, int max_len, const char *format, ...) /* {{{ */
+{
+	va_list arg;
+	int len;
+
+	va_start(arg, format);
+	len = zend_vspprintf(message, max_len, format, arg);
+	va_end(arg);
+	return len;
+}
+/* }}} */
+
 zend_brk_cont_element *get_next_brk_cont_element(zend_op_array *op_array)
 {
 	op_array->last_brk_cont++;
@@ -360,10 +369,9 @@ int get_next_op_number(zend_op_array *op_array)
 	return op_array->last;
 }
 
-/*  end zend_opcode.c  */
 
+/************************* zend_execute_API.c *************************/
 
-/*  zend_execute_API.c  */
 
 #define MAX_ABSTRACT_INFO_CNT 3
 #define MAX_ABSTRACT_INFO_FMT "%s%s%s%s"
@@ -401,6 +409,7 @@ static int zend_verify_abstract_class_function(zend_function *fn, zend_abstract_
 }
 /* }}} */
 
+
 void zend_verify_abstract_class(zend_class_entry *ce TSRMLS_DC) /* {{{ */
 {
 	zend_abstract_info ai;
@@ -424,6 +433,7 @@ void zend_verify_abstract_class(zend_class_entry *ce TSRMLS_DC) /* {{{ */
 /* }}} */
 
 #include "zend_vm.h"
+
 void execute_new_code(TSRMLS_D) /* {{{ */
 {
 	zend_op *opline, *end;
@@ -478,9 +488,9 @@ void execute_new_code(TSRMLS_D) /* {{{ */
 		ZEND_VM_SET_OPCODE_HANDLER(opline);
 		opline++;
 	}
-	
+
 	zend_release_labels(1 TSRMLS_CC);
-	
+
 	EG(return_value_ptr_ptr) = NULL;
 	EG(active_op_array) = CG(active_op_array);
 	orig_interactive = CG(interactive);
@@ -498,10 +508,9 @@ void execute_new_code(TSRMLS_D) /* {{{ */
 /* }}} */
 
 
-/*  zend_list.c  */
+/************************* zend_list.c *************************/
 
 static HashTable list_destructors; // ????
-
 int zend_init_rsrc_list(TSRMLS_D)
 {
 	if (zend_hash_init(&EG(regular_list), 0, NULL, list_entry_destructor, 0)==SUCCESS) {
@@ -536,9 +545,6 @@ void list_entry_destructor(void *ptr)
 		zend_error(E_WARNING,"Unknown list entry type in request shutdown (%d)", le->type);
 	}
 }
-
-/*  end zend_execute_API.c  */
-
 
 
 /*

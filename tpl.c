@@ -254,6 +254,8 @@ static int yaf_view_stupy_extract_attrs(zval *vars TSRMLS_DC) {
 	uint var_name_len;
 	HashPosition pos;
 	char anony_name[sizeof(ulong)];
+	char new_name[128];
+	int new_name_len;
 
 #if ((PHP_MAJOR_VERSION == 5) && (PHP_MINOR_VERSION > 2)) || (PHP_MAJOR_VERSION > 5)
 	if (!EG(active_symbol_table)) {
@@ -302,8 +304,7 @@ static int yaf_view_stupy_extract_attrs(zval *vars TSRMLS_DC) {
 				zval **orig_var;
 				if (zend_hash_find(EG(active_symbol_table), var_name, var_name_len, (void **) &orig_var)==SUCCESS) {
 					Z_ADDREF_PP(orig_var);
-					char new_name[128];
-					int new_name_len = snprintf(new_name, 128, "___%s", var_name);
+					new_name_len = snprintf(new_name, 128, "___%s", var_name);
 					zend_hash_update(Z_ARRVAL_P(vars), new_name, new_name_len + 1, orig_var, sizeof(zval *), NULL);
 				}
 				ZEND_SET_SYMBOL_WITH_LENGTH(EG(active_symbol_table), var_name, var_name_len, *entry, Z_REFCOUNT_P(*entry) + 1, 0 /**PZVAL_IS_REF(*entry)*/);
@@ -361,6 +362,11 @@ int yaf_view_stupy_render(yaf_view_t *view, zval *tpl, zval * vars, zval *ret TS
 	yaf_view_stupy_buffer *buffer;
 	zend_bool short_open_tag;
 #endif
+	int old_error_reporting;
+	int import_ret;
+	char *efile;
+	int efile_len;
+	char cwd[MAXPATHLEN];
 
 	if (IS_STRING != Z_TYPE_P(tpl)) {
 		return 0;
@@ -403,10 +409,10 @@ int yaf_view_stupy_render(yaf_view_t *view, zval *tpl, zval * vars, zval *ret TS
 		script 	= Z_STRVAL_P(tpl);
 		len 	= Z_STRLEN_P(tpl);
 
-		int old_error_reporting = EG(error_reporting);
+		old_error_reporting = EG(error_reporting);
 		EG(error_reporting) &= ~STU_G(tpl_suppress);
 		STU_G(st_tpl_compiling) = 1;
-		int import_ret = yaf_loader_import(script, len + 1, 0 TSRMLS_CC);
+		import_ret = yaf_loader_import(script, len + 1, 0 TSRMLS_CC);
 		STU_G(st_tpl_compiling) = 0;
 		EG(error_reporting)  = old_error_reporting;
 		if (import_ret == 0) {
@@ -432,10 +438,9 @@ int yaf_view_stupy_render(yaf_view_t *view, zval *tpl, zval * vars, zval *ret TS
 			if (YAF_G(view_directory)) {
 				len = spprintf(&script, 0, "%s%c%s", YAF_G(view_directory), DEFAULT_SLASH, Z_STRVAL_P(tpl));
 			} else {
-				const char *efile = zend_get_executed_filename();
-				int efile_len = strlen(efile);
+				efile = zend_get_executed_filename(TSRMLS_C);
+				efile_len = strlen(efile);
 				if (efile && IS_ABSOLUTE_PATH(efile, efile_len) && efile_len < MAXPATHLEN) {
-					char cwd[MAXPATHLEN];
 					memcpy(cwd, efile, efile_len);
 					zend_dirname(cwd, efile_len);
 					if (!STU_G(tpl_include_dir))
@@ -464,11 +469,11 @@ int yaf_view_stupy_render(yaf_view_t *view, zval *tpl, zval * vars, zval *ret TS
 			len = spprintf(&script, 0, "%s%c%s", Z_STRVAL_P(tpl_dir), DEFAULT_SLASH, Z_STRVAL_P(tpl));
 		}
 
-		int old_error_reporting = EG(error_reporting);
+		old_error_reporting = EG(error_reporting);
 		EG(error_reporting) &= ~STU_G(tpl_suppress);
 		STU_G(st_tpl_compiling) = 1;
 		script[len] = '\0';
-		int import_ret = yaf_loader_import(script, len + 1, 0 TSRMLS_CC);
+		import_ret = yaf_loader_import(script, len + 1, 0 TSRMLS_CC);
 		STU_G(st_tpl_compiling) = 0;
 		EG(error_reporting) = old_error_reporting;
 		if (import_ret == 0) {
@@ -532,6 +537,14 @@ int yaf_view_stupy_display(yaf_view_t *view, zval *tpl, zval *vars, zval *ret TS
 #if ((PHP_MAJOR_VERSION == 5) && (PHP_MINOR_VERSION < 4))
 	zend_bool short_open_tag;
 #endif
+	char *efile;
+	int old_error_reporting;
+	int import_ret;
+	zval *tpl_dir;
+	int efile_len;
+	char cwd[MAXPATHLEN];
+	zval **short_tag;
+	zval *options;
 
 	if (IS_STRING != Z_TYPE_P(tpl)) {
 		return 0;
@@ -555,8 +568,7 @@ int yaf_view_stupy_display(yaf_view_t *view, zval *tpl, zval *vars, zval *ret TS
 #if ((PHP_MAJOR_VERSION == 5) && (PHP_MINOR_VERSION < 4))
 	short_open_tag = CG(short_tags);
 	{
-		zval **short_tag;
-		zval *options = zend_read_property(yaf_view_stupy_ce, view, ZEND_STRL(YAF_VIEW_PROPERTY_NAME_OPTS), 0 TSRMLS_CC);
+		options = zend_read_property(yaf_view_stupy_ce, view, ZEND_STRL(YAF_VIEW_PROPERTY_NAME_OPTS), 0 TSRMLS_CC);
 		if (IS_ARRAY != Z_TYPE_P(options)
 				|| (zend_hash_find(Z_ARRVAL_P(options), ZEND_STRS("short_tag"), (void **)&short_tag) == FAILURE)
 				|| zend_is_true(*short_tag)) {
@@ -568,10 +580,10 @@ int yaf_view_stupy_display(yaf_view_t *view, zval *tpl, zval *vars, zval *ret TS
 	if (IS_ABSOLUTE_PATH(Z_STRVAL_P(tpl), Z_STRLEN_P(tpl))) {
 		script 	= Z_STRVAL_P(tpl);
 		len 	= Z_STRLEN_P(tpl);
-		int old_error_reporting = EG(error_reporting);
+		old_error_reporting = EG(error_reporting);
 		EG(error_reporting) &= ~STU_G(tpl_suppress);
 		STU_G(st_tpl_compiling) = 1;
-		int import_ret = yaf_loader_import(script, len + 1, 0 TSRMLS_CC);
+		import_ret = yaf_loader_import(script, len + 1, 0 TSRMLS_CC);
 		STU_G(st_tpl_compiling) = 0;
 		EG(error_reporting) = old_error_reporting;
 		if (import_ret == 0) {
@@ -588,16 +600,15 @@ int yaf_view_stupy_display(yaf_view_t *view, zval *tpl, zval *vars, zval *ret TS
 			return 0;
 		}
 	} else {
-		zval *tpl_dir = zend_read_property(yaf_view_stupy_ce, view, ZEND_STRL(YAF_VIEW_PROPERTY_NAME_TPLDIR), 0 TSRMLS_CC);
+		tpl_dir = zend_read_property(yaf_view_stupy_ce, view, ZEND_STRL(YAF_VIEW_PROPERTY_NAME_TPLDIR), 0 TSRMLS_CC);
 
 		if (IS_STRING != Z_TYPE_P(tpl_dir)) {
 			if (YAF_G(view_directory)) {
 				len = spprintf(&script, 0, "%s%c%s", YAF_G(view_directory), DEFAULT_SLASH, Z_STRVAL_P(tpl));
 			} else {
-				const char *efile = zend_get_executed_filename();
-				int efile_len = strlen(efile);
+				efile = zend_get_executed_filename(TSRMLS_C);
+				efile_len = strlen(efile);
 				if (efile && IS_ABSOLUTE_PATH(efile, efile_len) && efile_len < MAXPATHLEN) {
-					char cwd[MAXPATHLEN];
 					memcpy(cwd, efile, efile_len);
 					zend_dirname(cwd, efile_len);
 					if (!STU_G(tpl_include_dir))
@@ -622,11 +633,11 @@ int yaf_view_stupy_display(yaf_view_t *view, zval *tpl, zval *vars, zval *ret TS
 			len = spprintf(&script, 0, "%s%c%s", Z_STRVAL_P(tpl_dir), DEFAULT_SLASH, Z_STRVAL_P(tpl));
 		}
 
-		int old_error_reporting = EG(error_reporting);
+		old_error_reporting = EG(error_reporting);
 		EG(error_reporting) &= ~STU_G(tpl_suppress);
 		STU_G(st_tpl_compiling) = 1;
 		script[len] = '\0';
-		int import_ret = yaf_loader_import(script, len + 1, 0 TSRMLS_CC);
+		import_ret = yaf_loader_import(script, len + 1, 0 TSRMLS_CC);
 		STU_G(st_tpl_compiling) = 0;
 		EG(error_reporting) = old_error_reporting;
 		if (import_ret == 0) {
@@ -670,6 +681,10 @@ int yaf_view_stupy_eval(yaf_view_t *view, zval *tpl, zval * vars, zval *ret TSRM
 	yaf_view_stupy_buffer *buffer;
 	zend_bool short_open_tag;
 #endif
+	zval phtml;
+	zend_op_array *new_op_array;
+	char *eval_desc;
+	int old_error_reporting;
 
 	if (IS_STRING != Z_TYPE_P(tpl)) {
 		return 0;
@@ -709,9 +724,7 @@ int yaf_view_stupy_eval(yaf_view_t *view, zval *tpl, zval * vars, zval *ret TSRM
 #endif
 
 	if (Z_STRLEN_P(tpl)) {
-		zval phtml;
-		zend_op_array *new_op_array;
-		char *eval_desc = zend_make_compiled_string_description("template code" TSRMLS_CC);
+		eval_desc = zend_make_compiled_string_description("template code" TSRMLS_CC);
 		
 		/* eval require code mustn't be wrapped in opening and closing PHP tags */
 		INIT_ZVAL(phtml);
@@ -720,7 +733,7 @@ int yaf_view_stupy_eval(yaf_view_t *view, zval *tpl, zval * vars, zval *ret TSRM
 		Z_STRVAL(phtml) = (char *)emalloc(Z_STRLEN(phtml) + 1);
 		snprintf(Z_STRVAL(phtml), Z_STRLEN(phtml) + 1, "?>%s", Z_STRVAL_P(tpl));
 
-		int old_error_reporting = EG(error_reporting);
+		old_error_reporting = EG(error_reporting);
 		EG(error_reporting) &= ~STU_G(tpl_suppress);
 		STU_G(st_tpl_compiling) = 1;
 		new_op_array = zend_compile_string(&phtml, eval_desc TSRMLS_CC);
@@ -860,17 +873,20 @@ PHP_METHOD(yaf_view_stupy, setStaticOption) {
 	zval *value;
 	char *name;
 	uint len;
+	char *c;
+	int need_free = 0;
+	
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sz", &name, &len, &value) == FAILURE) {
 		WRONG_PARAM_COUNT;
 	}
-	int need_free = 0;
+	
 	if (len == strlen("tpl_mod_pattern") && !strcmp(name, "tpl_mod_pattern")) {
 		if (IS_STRING != Z_TYPE_P(value)) {
 			need_free = 1;
 			Z_ADDREF_P(value);
 			convert_to_string_ex(&value);
 		}
-		char *c = strchr(Z_STRVAL_P(value), '%');
+		c = strchr(Z_STRVAL_P(value), '%');
 		if (*c == NULL || *(c+1) != 's' || strchr(c+1, '%') != NULL) {
 			php_error_docref(NULL TSRMLS_CC, E_ERROR, "tpl_mod_pattern should use one \"%%s\" to expand the mod name");
 		}
@@ -887,7 +903,7 @@ PHP_METHOD(yaf_view_stupy, setStaticOption) {
 			php_error_docref(NULL TSRMLS_CC, E_ERROR, "Expects an absolute path for modifiers directory");
 			RETURN_FALSE;
 		}
-		char *c = strchr(Z_STRVAL_P(value), '%');
+		c = strchr(Z_STRVAL_P(value), '%');
 		if (c != NULL && (*(c+1) != 's' || strchr(c+1, '%') != NULL)) {
 			php_error_docref(NULL TSRMLS_CC, E_ERROR, "tpl_mod_file_pattern should be a file or use one \"%%s\" to expand the mod name");
 		}
@@ -960,10 +976,12 @@ PHP_METHOD(yaf_view_stupy, setStaticOption) {
 PHP_METHOD(yaf_view_stupy, setTag) {
 	char *name, *value;
 	uint name_len, value_len;
+	char *p;
+	
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ss", &name, &name_len, &value, &value_len) == FAILURE) {
 		WRONG_PARAM_COUNT;
 	}
-	char *p = estrndup(value, (value_len + 1));
+	p = estrndup(value, (value_len + 1));
 	p[value_len] = '\0';
 	zend_hash_update(&STU_G(tpl_tags), name, name_len+1, &p, sizeof(char *), NULL);
 	RETURN_TRUE;
@@ -1023,16 +1041,16 @@ PHP_METHOD(yaf_view_stupy, compose) {
 */
 PHP_METHOD(yaf_view_stupy, assign) {
 	uint argc = ZEND_NUM_ARGS();
+	zval *value;
+	char *name;
+	uint len;
+		
 	if (argc == 1) {
-		zval *value;
 		if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &value) == FAILURE) {
 			return;
 		}
 		RETURN_BOOL(yaf_view_stupy_assign_multi(getThis(), value TSRMLS_CC));
 	} else if (argc == 2) {
-		zval *value;
-		char *name;
-		uint len;
 		if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sz", &name, &len, &value) == FAILURE) {
 			return;
 		}
@@ -1221,12 +1239,16 @@ static int autoload_modifier(char **ppModifier TSRMLS_DC) /* {{{ */
 {
 	char file[MAXPATHLEN];
 	int len;
+	int ret;
+	char path_pattern[MAXPATHLEN];
+	char *efile;
+	int efile_len;
+	char cwd[MAXPATHLEN];
+	
 	if (!STU_G(tpl_mod_file_pattern)) {
-		char path_pattern[MAXPATHLEN];
-		const char *efile = zend_get_executed_filename();
-		int efile_len = strlen(efile);
+		efile = zend_get_executed_filename(TSRMLS_C);
+		efile_len = strlen(efile);
 		if (efile && IS_ABSOLUTE_PATH(efile, efile_len) && efile_len < MAXPATHLEN) {
-			char cwd[MAXPATHLEN];
 			memcpy(cwd, efile, efile_len);
 			zend_dirname(cwd, efile_len);
 			len = snprintf(path_pattern, MAXPATHLEN, "%s/%s.php", cwd, STU_G(tpl_mod_pattern));
@@ -1239,7 +1261,7 @@ static int autoload_modifier(char **ppModifier TSRMLS_DC) /* {{{ */
 		len = snprintf(file, MAXPATHLEN, STU_G(tpl_mod_file_pattern), *ppModifier);
 	}
 	file[len] = '\0';
-	int ret = yaf_loader_import(file, len + 1, 0 TSRMLS_CC);
+	ret = yaf_loader_import(file, len + 1, 0 TSRMLS_CC);
 	if (!ret)
 		php_error_docref(NULL TSRMLS_CC, E_WARNING, "modifier %s not exist(autoload failed: %s)", *ppModifier, file);
 	return 0;
@@ -1249,12 +1271,15 @@ static zend_op_array *_stupy_compile_file(zend_file_handle *file_handle, int typ
 {
 	char *mod_name;
 	ulong num_key;
+	char *c;
+	zend_op_array *ret;
+	
 	if (STU_G(st_tpl_compiling)) {
 		STU_G(st_tpl) = 0;
 		STU_G(st_tpl_with_script) = 0;
 		STU_G(st_tpl_no_constant) = 0;
 		zend_hash_clean(&STU_G(tpl_modifiers));
-		zend_op_array *ret = stupy_compile_file(file_handle, type TSRMLS_CC);
+		ret = stupy_compile_file(file_handle, type TSRMLS_CC);
 		STU_G(st_tpl_compiling) = 0; // autoload modifiers, use the zend_orig_compile_file
 		for(zend_hash_internal_pointer_reset(&STU_G(tpl_modifiers));
 				zend_hash_has_more_elements(&STU_G(tpl_modifiers)) == SUCCESS;
@@ -1262,7 +1287,7 @@ static zend_op_array *_stupy_compile_file(zend_file_handle *file_handle, int typ
 			if (zend_hash_get_current_key(&STU_G(tpl_modifiers), &mod_name, &num_key, 0) == HASH_KEY_IS_STRING) {
 				autoload_modifier(&mod_name TSRMLS_CC);
 				if (STU_G(tpl_mod_file_pattern)) {
-					char *c = strchr(STU_G(tpl_mod_file_pattern), '%');
+					c = strchr(STU_G(tpl_mod_file_pattern), '%');
 					if (c == NULL) { // all mod in one file, load_once
 						break;
 					}
@@ -1280,12 +1305,15 @@ static zend_op_array *_stupy_compile_string(zval *source_string, char *filename 
 {
 	char *mod_name;
 	ulong num_key;
+	char *c;
+	zend_op_array *ret;
+	
 	if (STU_G(st_tpl_compiling)) {
 		STU_G(st_tpl) = 0;
 		STU_G(st_tpl_with_script) = 0;
 		STU_G(st_tpl_no_constant) = 0;
 		zend_hash_clean(&STU_G(tpl_modifiers));
-		zend_op_array *ret = stupy_compile_string(source_string, filename TSRMLS_CC);
+		ret = stupy_compile_string(source_string, filename TSRMLS_CC);
 		STU_G(st_tpl_compiling) = 0; // autoload modifiers, use the zend_orig_compile_string
 		for(zend_hash_internal_pointer_reset(&STU_G(tpl_modifiers));
 				zend_hash_has_more_elements(&STU_G(tpl_modifiers)) == SUCCESS;
@@ -1293,7 +1321,7 @@ static zend_op_array *_stupy_compile_string(zval *source_string, char *filename 
 			if (zend_hash_get_current_key(&STU_G(tpl_modifiers), &mod_name, &num_key, 0) == HASH_KEY_IS_STRING) {
 				autoload_modifier(&mod_name TSRMLS_CC);
 				if (STU_G(tpl_mod_file_pattern)) {
-					char *c = strchr(STU_G(tpl_mod_file_pattern), '%');
+					c = strchr(STU_G(tpl_mod_file_pattern), '%');
 					if (c == NULL) { // all mod in one file, load_once
 						break;
 					}
@@ -1340,6 +1368,34 @@ static void pefree_estring(char **str_p) /* {{{ */
 STU_MINIT_FUNCTION(tpl)
 {
 	zend_class_entry ce;
+	const char* tags[][2] = {
+		{"js", "<script language=\"javascript\" src=\"{$p[0]}\"></script>\n"},
+		{"css", "<link rel=\"stylesheet\" type=\"text/css\" href=\"{$p[0]}\" />\n"},
+		{"options", 
+"{? list($vals, $val_seleted) = $p; ?} \
+{if is_array($val_seleted)}{? list($val_name, $label_name, $val_seleted_tmp) = $val_seleted; $val_seleted = $val_seleted_tmp; ?} \
+	{foreach $vals as $item}{? $val = $item[$val_name]; $label = $item[$label_name]; ?}<option value=\"{$val}\"{if $val_seleted == $val} selected=\"selected\"{/if}>{$label}</option>\n \
+	{/foreach} \
+{else} \
+	{foreach $vals as $val => $label}<option value=\"{$val}\"{if $val_seleted == $val} selected=\"selected\"{/if}>{$label}</option>\n \
+	{/foreach} \
+{/if}"
+		},
+		{"radios", 
+"{? list($radio_name, $vals, $val_seleted) = $p; ?} \
+{if is_array($val_seleted)}{? list($val_name, $label_name, $val_seleted_tmp) = $val_seleted; $val_seleted = $val_seleted_tmp; ?} \
+	{foreach $vals as $item}{? $val = $item[$val_name]; $label = $item[$label_name]; ?}<li><input id=\"id_radio_{$radio_name}_{$val}\" value=\"{$val}\" type=\"radio\" name=\"{$radio_name}\" {if $val_seleted == $val} checked=\"checked\"{/if}/>\n \
+		<label for=\"id_radio_{$radio_name}_{$val}\">{$label}</label></li>\n \
+	{/foreach} \
+{else} \
+	{foreach $vals as $val => $label}<li><input id=\"id_radio_{$radio_name}_{$val}\" value=\"{$val}\" type=\"radio\" name=\"{$radio_name}\" {if $val_seleted == $val} checked=\"checked\"{/if}/>\n \
+		<label for=\"id_radio_{$radio_name}_{$val}\">{$label}</label></li>\n \
+	{/foreach} \
+{/if}"
+		}
+	};
+	int i, row = sizeof(tags) / sizeof(char*) / 2;
+	char *s;
 
 	INIT_CLASS_ENTRY(ce, "StupyTpl", yaf_view_stupy_methods);
 	yaf_view_stupy_ce = zend_register_internal_class_ex(&ce, NULL, NULL TSRMLS_CC);
@@ -1362,13 +1418,8 @@ STU_MINIT_FUNCTION(tpl)
 
 	// init the default tags
 	// @attention: php.ini config(stupy.tpl_tags) make precedence than these
-	const char* tags[][2] = {
-		{"js", "<script language=\"javascript\" src=\"{$p[0]}\"></script>\n"},
-		{"options", "{foreach $p[0] as $k => $v}<option value=\"{$k}\"{if $p[1] == $k} selected=\"selected\"{/if}>{$v}</option>\n{/foreach}"}
-	};
-	int i, row = sizeof(tags) / sizeof(char*) / 2;
 	for (i = 0; i < row; i++) {
-		char *s = pestrdup(tags[i][1], 1);
+		s = pestrdup(tags[i][1], 1);
 		zend_hash_update(STU_G(tpl_tags_sys), tags[i][0], strlen(tags[i][0]) + 1, &s, sizeof(char *), NULL);
 	}
 
@@ -1423,6 +1474,8 @@ PHP_FUNCTION(_stupy_check_extend)
 	char *file = NULL;
 	uint file_len;
 	long file_mtime, compile_time;
+	int tolerance;
+	
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "sl", &file, &file_len, &compile_time) == FAILURE) {
 		WRONG_PARAM_COUNT;
 	}
@@ -1444,7 +1497,7 @@ PHP_FUNCTION(_stupy_check_extend)
 	// check if the sub tpl is modified after last compile or not
 	// 3 seconds's tolerance, or if compile in the very second the tpl is modified may trigger this following warnning
 	// STU_G(use_request_time) < 0 is a trick, by include_options.phpt, it need non tolerance
-	int tolerance = (STU_G(use_request_time) >= 0) ? 3 : 0; 
+	tolerance = (STU_G(use_request_time) >= 0) ? 3 : 0; 
 	if (file_mtime >= compile_time + tolerance) {
 		if (STU_G(tpl_include_extend) == 1) {
 			php_error_docref(NULL TSRMLS_CC, E_WARNING, "sub tpl(%s) is modified, and may be it is opcode cached, you should clean the opcode cache, or just touch the top tpl.", file);
@@ -1546,6 +1599,15 @@ PHP_FUNCTION(stupy_mod_df)
 	long ts = 0, fmt_len;
 	char *fmt = NULL;
 	zval * z_ts;
+	char *p;
+	zval function, *z_ts_ret;
+	zval **call_params[1];
+	int localtime = 1;
+	char *s;
+	zval *z_f_ret, *z_param_fmt, *z_param_ts;
+	zval **call_params2[2];
+	int c_ret;
+	
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z|s", &z_ts, &fmt, &fmt_len) == FAILURE) {
 		WRONG_PARAM_COUNT;
 	}
@@ -1558,7 +1620,7 @@ PHP_FUNCTION(stupy_mod_df)
 	if (Z_TYPE_P(z_ts) == IS_LONG)
 		ts = Z_LVAL_P(z_ts);
 	else if (Z_TYPE_P(z_ts) == IS_STRING) {
-		char *p = Z_STRVAL_P(z_ts);
+		p = Z_STRVAL_P(z_ts);
 		while (*p == ' ' || *p == '\t') p++;
 		while (*p >= '0' && *p <= '9') p++;
 		while (*p == ' ' || *p == '\t') p++;
@@ -1566,10 +1628,8 @@ PHP_FUNCTION(stupy_mod_df)
 			// all digit, just convert_to_long
 		} else {
 			// call strtotime
-			zval function, *z_ts_ret;
-			ZVAL_STRING(&function, "strtotime", 0);
-			zval **call_params[1];
 			call_params[0] = &z_ts;
+			ZVAL_STRING(&function, "strtotime", 0);
 			if (call_user_function_ex(CG(function_table), NULL, &function, &z_ts_ret, 1, call_params, 0, NULL TSRMLS_CC) == SUCCESS) {
 				ts = Z_LVAL_P(z_ts_ret);
 				zval_ptr_dtor(&z_ts_ret);
@@ -1588,22 +1648,19 @@ PHP_FUNCTION(stupy_mod_df)
 		ts = time(NULL);
 
 	if (strchr(fmt, '%') == NULL) {
-		int localtime = 1;
-		char *s = php_format_date(fmt, fmt_len, ts, localtime TSRMLS_CC);
+		s = php_format_date(fmt, fmt_len, ts, localtime TSRMLS_CC);
 		RETVAL_STRING(s, 0);
 
 	} else {
 		// call strftime
-		zval function, *z_f_ret, *z_param_fmt, *z_param_ts;
 		ZVAL_STRING(&function, "strftime", 0);
 		MAKE_STD_ZVAL(z_param_fmt);
 		ZVAL_STRINGL(z_param_fmt, fmt, fmt_len, 1);
 		MAKE_STD_ZVAL(z_param_ts);
 		ZVAL_LONG(z_param_ts, ts);
-		zval **call_params[2];
-		call_params[0] = &z_param_fmt;
-		call_params[1] = &z_param_ts;
-		int c_ret = call_user_function_ex(CG(function_table), NULL, &function, &z_f_ret, 2, call_params, 0, NULL TSRMLS_CC);
+		call_params2[0] = &z_param_fmt;
+		call_params2[1] = &z_param_ts;
+		c_ret = call_user_function_ex(CG(function_table), NULL, &function, &z_f_ret, 2, call_params2, 0, NULL TSRMLS_CC);
 		zval_ptr_dtor(&z_param_fmt);
 		zval_ptr_dtor(&z_param_ts);
 		if (c_ret == SUCCESS) {

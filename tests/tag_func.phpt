@@ -17,6 +17,12 @@ echo $view->eval(<<<'TPL'
 
 {options array(1=>'a','2'=>'b','3'=>'c')}
 
+{options array(array('id'=> 11, 'desc'=>'a'), array('id'=>22, 'desc'=>'b'), array('id'=>33, 'desc'=>'c')) array('id', 'desc', 22)}
+
+{radios 'ddd' array(1=>'a','2'=>'b','3'=>'c') 2}
+
+{radios 'abc' array(array('id'=> 11, 'desc'=>'a'), array('id'=>22, 'desc'=>'b'), array('id'=>33, 'desc'=>'c')) array('id', 'desc', 22)}
+
 {$k = "global-k"} {$v = "global-v"} {$p = 'global-p'}
 
 {taga "abc" 123 attra=aaa "ccc" attrd=ddd}
@@ -45,19 +51,37 @@ TPL
 --EXPECTF--
 <script language="javascript" src="js/abc.js"></script>
 
-<option value="0" selected="selected">1</option>
-<option value="1">2</option>
-<option value="2">3</option>
-<option value="3">4</option>
-
-<option value="1">a</option>
-<option value="2" selected="selected">b</option>
-<option value="3">c</option>
-
-<option value="1">a</option>
-<option value="2">b</option>
-<option value="3">c</option>
-
+  	<option value="0" selected="selected">1</option>
+ 	<option value="1">2</option>
+ 	<option value="2">3</option>
+ 	<option value="3">4</option>
+ 	 
+  	<option value="1">a</option>
+ 	<option value="2" selected="selected">b</option>
+ 	<option value="3">c</option>
+ 	 
+  	<option value="1">a</option>
+ 	<option value="2">b</option>
+ 	<option value="3">c</option>
+ 	 
+  	<option value="11">a</option>
+ 	<option value="22" selected="selected">b</option>
+ 	<option value="33">c</option>
+ 	 
+  	<li><input id="id_radio_ddd_1" value="1" type="radio" name="ddd" />
+ 		<label for="id_radio_ddd_1">a</label></li>
+ 	<li><input id="id_radio_ddd_2" value="2" type="radio" name="ddd"  checked="checked"/>
+ 		<label for="id_radio_ddd_2">b</label></li>
+ 	<li><input id="id_radio_ddd_3" value="3" type="radio" name="ddd" />
+ 		<label for="id_radio_ddd_3">c</label></li>
+ 	 
+  	<li><input id="id_radio_abc_11" value="11" type="radio" name="abc" />
+ 		<label for="id_radio_abc_11">a</label></li>
+ 	<li><input id="id_radio_abc_22" value="22" type="radio" name="abc"  checked="checked"/>
+ 		<label for="id_radio_abc_22">b</label></li>
+ 	<li><input id="id_radio_abc_33" value="33" type="radio" name="abc" />
+ 		<label for="id_radio_abc_33">c</label></li>
+ 	 
 global-k global-v global-p
  item-0-abc  item-1-123  item-attra-aaa  item-2-ccc  item-attrd-ddd 
 global-k global-v global-p

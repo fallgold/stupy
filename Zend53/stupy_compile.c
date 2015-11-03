@@ -23,6 +23,10 @@
 
 /* zend.c */
 
+#if defined(__GNUC__) && __GNUC__ >= 3 && !defined(__INTEL_COMPILER) && !defined(DARWIN) && !defined(__hpux) && !defined(_AIX) && !defined(__osf__)
+void zend_error_noreturn(int type, const char *format, ...) __attribute__ ((alias("zend_error"),noreturn));
+#endif
+
 #define zend_vspprintf vspprintf
 
 #define SAVE_STACK(stack) do { \

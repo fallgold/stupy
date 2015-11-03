@@ -36,6 +36,23 @@
 #include "main/php.h"
 #include "ext/standard/php_filestat.h"
 
+#ifdef LANG_SCNG
+#undef LANG_SCNG
+#endif
+
+/* Language Scanner */
+#ifdef ZTS
+extern ts_rsrc_id tpl_language_scanner_globals_id;
+# define LANG_SCNG(v) TSRMG(tpl_language_scanner_globals_id, zend_php_scanner_globals *, v)
+#else
+extern zend_php_scanner_globals tpl_language_scanner_globals;
+# define LANG_SCNG(v) (tpl_language_scanner_globals.v)
+#endif
+
+#ifdef ZEND_API
+#undef ZEND_API
+#endif
+#define ZEND_API
 
 #define CONSTANT_EX(op_array, op) \
 	(op_array)->literals[op].constant
@@ -6964,7 +6981,7 @@ void zend_do_end_compilation(TSRMLS_D) /* {{{ */
 
 /* {{{ zend_dirname
    Returns directory name component of path */
-ZEND_API size_t zend_dirname(char *path, size_t len)
+ZEND_API size_t __xxx_zend_dirname(char *path, size_t len) // php.lib has exported
 {
 	register char *end = path + len - 1;
 	unsigned int len_adjust = 0;
@@ -7058,13 +7075,19 @@ ZEND_API size_t zend_dirname(char *path, size_t len)
 
 void tpl_do_include(znode *result, znode *file TSRMLS_DC) /* {{{ */
 {
+	int len;
+	char *s1, *s2;
+	int file_ok = 1;
+
+	znode check_result, check_func, check_param;
+
 	// file to realpath
 	if (STU_G(tpl_include_dir) && !IS_ABSOLUTE_PATH(Z_STRVAL(file->u.constant), Z_STRLEN(file->u.constant))) {
 		int len = Z_STRLEN(file->u.constant) + strlen(STU_G(tpl_include_dir)) + 1; // dont forget the '/'
-		char* s = safe_emalloc(len, 1, 1);
-		sprintf(s, "%s/%s", STU_G(tpl_include_dir), Z_STRVAL(file->u.constant));
+		s1 = safe_emalloc(len, 1, 1);
+		sprintf(s1, "%s/%s", STU_G(tpl_include_dir), Z_STRVAL(file->u.constant));
 		zval_dtor(&file->u.constant);
-		Z_STRVAL(file->u.constant) = s;
+		Z_STRVAL(file->u.constant) = s1;
 		Z_STRLEN(file->u.constant) = len;
 	}
 
@@ -7076,9 +7099,8 @@ void tpl_do_include(znode *result, znode *file TSRMLS_DC) /* {{{ */
 			STU_G(tpl_compile_time) = stu_time();
 		}
 
-		znode check_result, check_func, check_param;
-		char* s = estrndup("_stupy_check_extend", 19);
-		Z_STRVAL(check_func.u.constant) = s;
+		s2 = estrndup("_stupy_check_extend", 19);
+		Z_STRVAL(check_func.u.constant) = s2;
 		Z_STRLEN(check_func.u.constant) = 19;
 		Z_TYPE(check_func.u.constant) = IS_STRING;
 		check_func.op_type = IS_CONST;
@@ -7092,10 +7114,9 @@ void tpl_do_include(znode *result, znode *file TSRMLS_DC) /* {{{ */
 		zend_do_end_function_call(&check_func, &check_result, &check_param, 0, 0 TSRMLS_CC);
 		zend_do_extended_fcall_end(TSRMLS_C);
 
-		int file_ok = 1;
 		zend_do_if_cond(&check_result, &check_result TSRMLS_CC);
 		{
-			file_ok = stupy_extend_file(Z_STRVAL(file->u.constant), ZEND_INCLUDE);
+			file_ok = stupy_extend_file(Z_STRVAL(file->u.constant), ZEND_INCLUDE TSRMLS_CC);
 		}
 		zend_do_if_after_statement(&check_result, 1 TSRMLS_CC);
 		{
@@ -7107,7 +7128,7 @@ void tpl_do_include(znode *result, znode *file TSRMLS_DC) /* {{{ */
 		zend_do_if_end(TSRMLS_C);
 
 	} else { // do extend
-		stupy_extend_file(Z_STRVAL(file->u.constant), ZEND_INCLUDE);
+		stupy_extend_file(Z_STRVAL(file->u.constant), ZEND_INCLUDE TSRMLS_CC);
 		efree(Z_STRVAL(file->u.constant));
 	}
 	zend_do_free(result TSRMLS_CC);
@@ -7120,31 +7141,40 @@ void tpl_do_function(znode *result, znode *modifier, znode *attr_list, znode *op
 	char **tag_content, *orig_mod = NULL;
 	int orig_mod_len;
 	znode tag_param;
+
+	char char_pos_buf[32];
+	uint char_pos_len;
+	int new_name_len;
+	char *new_name;
+	const char *fmt = "<?php function %s($t, $p) { ?>%s<?php } ?>";
+	int content_len;
+	char *new_content;
+	int is_dynamic, offset = 1; 
+	znode post_tag_func;
+	zend_function *function;
+
 	zend_str_tolower(Z_STRVAL(modifier->u.constant), Z_STRLEN(modifier->u.constant));
+
 	// tpl_tags take precedence than tpl_tags_sys, so that user define tag can rewrite the sys tag
 	if (zend_hash_find(&STU_G(tpl_tags), Z_STRVAL(modifier->u.constant), Z_STRLEN(modifier->u.constant)+1, (void **) &tag_content) == SUCCESS
 		|| zend_hash_find(STU_G(tpl_tags_sys), Z_STRVAL(modifier->u.constant), Z_STRLEN(modifier->u.constant)+1, (void **) &tag_content) == SUCCESS) {
 		orig_mod = Z_STRVAL(modifier->u.constant);
 		orig_mod_len = Z_STRLEN(modifier->u.constant); 
 		if (STU_G(tpl_tag_symbol)) {
-			char char_pos_buf[32];
-			uint char_pos_len;
 			char_pos_len = zend_sprintf(char_pos_buf, "%p", *tag_content);
-			int new_name_len = orig_mod_len + strlen("_stupy_t_") + char_pos_len;
-			char *new_name = emalloc(new_name_len + 1);
+			new_name_len = orig_mod_len + strlen("_stupy_t_") + char_pos_len;
+			new_name = emalloc(new_name_len + 1);
 			new_name_len = snprintf(new_name, new_name_len + 1, "_stupy_t_%s%s", Z_STRVAL(modifier->u.constant), char_pos_buf);
 			Z_STRVAL(modifier->u.constant) = new_name;
 			Z_STRLEN(modifier->u.constant) = new_name_len;
-			zend_function *function;
 			if (zend_hash_find(CG(function_table), new_name, new_name_len + 1, &function) == FAILURE) {
 				// use the next commented line to extract attrs if needed
 				/*const char *fmt = "<?php function %s($t, $p) { _stupy_pre_tag($t, $p); ?>%s<?php } ?>";*/
-				const char *fmt = "<?php function %s($t, $p) { ?>%s<?php } ?>";
-				int content_len = strlen(*tag_content) + strlen(fmt) + new_name_len - 4; // 4 is %s x 2
-				char *new_content = emalloc(content_len + 1); 
+				content_len = strlen(*tag_content) + strlen(fmt) + new_name_len - 4; // 4 is %s x 2
+				new_content = emalloc(content_len + 1); 
 				content_len = snprintf(new_content, content_len + 1, fmt, new_name, *tag_content);
 				// extend tag_content
-				stupy_extend_string(new_content, content_len);
+				stupy_extend_string(new_content, content_len TSRMLS_CC);
 				efree(new_content);
 			}
 		} else {
@@ -7153,8 +7183,7 @@ void tpl_do_function(znode *result, znode *modifier, znode *attr_list, znode *op
 		}
 	}
 	// call pre tag or function
-	int is_dynamic = zend_do_begin_function_call(modifier, 1 TSRMLS_CC); 
-	int offset = 1; 
+	is_dynamic = zend_do_begin_function_call(modifier, 1 TSRMLS_CC); 
 	if (orig_mod != NULL) { 
 		tag_param.op_type = IS_CONST; 
 		Z_TYPE(tag_param.u.constant) = IS_STRING; 
@@ -7169,9 +7198,8 @@ void tpl_do_function(znode *result, znode *modifier, znode *attr_list, znode *op
 	if (orig_mod != NULL) { 
 		if (!STU_G(tpl_tag_symbol)) {
 			// extend tag_content
-			stupy_extend_string(*tag_content, strlen(*tag_content));
+			stupy_extend_string(*tag_content, strlen(*tag_content) TSRMLS_CC);
 			// post tag
-			znode post_tag_func;
 			Z_STRVAL(post_tag_func.u.constant) = estrndup("_stupy_post_tag", 15);
 			Z_STRLEN(post_tag_func.u.constant) = 15;
 			Z_TYPE(post_tag_func.u.constant) = IS_STRING;
@@ -7195,15 +7223,106 @@ void tpl_do_function(znode *result, znode *modifier, znode *attr_list, znode *op
 void tpl_do_assign(znode *var, znode *value TSRMLS_DC) /* {{{ */
 {
 	znode dummy_var_name, dummy_result;
+	char buf[64];
+	uint len;
+
 	dummy_var_name.op_type = IS_CONST; 
 	Z_TYPE(dummy_var_name.u.constant) = IS_STRING; 
-	char buf[64];
-	uint len = zend_sprintf(buf, "_stupy_tmp_i_%d", STU_G(tpl_assign_idx)++);
+	len = zend_sprintf(buf, "_stupy_tmp_i_%d", STU_G(tpl_assign_idx)++);
 	Z_STRVAL(dummy_var_name.u.constant) = estrndup(buf, len);
 	Z_STRLEN(dummy_var_name.u.constant) = len;
 	zend_do_begin_variable_parse(TSRMLS_C); 
 	fetch_simple_variable(var, &dummy_var_name, 1 TSRMLS_CC); 
 	zend_do_assign(&dummy_result, var, value TSRMLS_CC);
+	zend_do_free(&dummy_result TSRMLS_CC);
+}
+
+void tpl_do_foreach_i_init(long foreach_idx TSRMLS_DC) /* {{{ */
+{
+	znode dummy_var_name, dummy_result, dummy_var, dummy_value;
+	znode dummy_var_bak, dummy_var_bak_name;
+	char buf[64];
+	uint len;
+
+	//zend_printf("init idx:%ld\n", foreach_idx);
+
+	dummy_var_name.op_type = IS_CONST;
+	Z_TYPE(dummy_var_name.u.constant) = IS_STRING; 
+	Z_STRVAL(dummy_var_name.u.constant) = estrndup("foreach_i", 9);
+	Z_STRLEN(dummy_var_name.u.constant) = 9;
+	zend_do_begin_variable_parse(TSRMLS_C);
+	fetch_simple_variable(&dummy_var, &dummy_var_name, 1 TSRMLS_CC);
+	zend_do_end_variable_parse(&dummy_var, BP_VAR_R, 0 TSRMLS_CC);
+
+	dummy_var_bak_name.op_type = IS_CONST; 
+	Z_TYPE(dummy_var_bak_name.u.constant) = IS_STRING; 
+	len = zend_sprintf(buf, "_stupy_foreach_i_bak_%d", foreach_idx);
+	Z_STRVAL(dummy_var_bak_name.u.constant) = estrndup(buf, len);
+	Z_STRLEN(dummy_var_bak_name.u.constant) = len;
+	zend_do_begin_variable_parse(TSRMLS_C); 
+	fetch_simple_variable(&dummy_var_bak, &dummy_var_bak_name, 1 TSRMLS_CC);
+	// zend_do_end_variable_parse(&dummy_var_bak, BP_VAR_W, 0 TSRMLS_CC); // 这里不需要 parse end, do_assign 会 parse end 左值
+
+	// $_stupy_foreach_i_bak_{$foreach_idx} = $foreach_i;
+	zend_do_assign(&dummy_result, &dummy_var_bak, &dummy_var TSRMLS_CC);
+	zend_do_free(&dummy_result TSRMLS_CC);
+
+	// 前面赋值的时候已经 parse end, 重新 parse
+	zend_do_begin_variable_parse(TSRMLS_C);
+	fetch_simple_variable(&dummy_var, &dummy_var_name, 1 TSRMLS_CC);
+
+	// $foreach_i = 0;
+	dummy_value.op_type = IS_CONST;
+	Z_TYPE(dummy_value.u.constant) = IS_LONG; 
+	Z_LVAL(dummy_value.u.constant) = 0;
+	zend_do_assign(&dummy_result, &dummy_var, &dummy_value TSRMLS_CC);
+	zend_do_free(&dummy_result TSRMLS_CC);
+}
+
+void tpl_do_foreach_i_inc(TSRMLS_DC) /* {{{ */
+{
+	znode dummy_var_name, dummy_result, dummy_var;
+
+	dummy_var_name.op_type = IS_CONST; 
+	Z_TYPE(dummy_var_name.u.constant) = IS_STRING; 
+	Z_STRVAL(dummy_var_name.u.constant) = estrndup("foreach_i", 9);
+	Z_STRLEN(dummy_var_name.u.constant) = 9;
+
+	// ++$foreach_i;
+	zend_do_begin_variable_parse(TSRMLS_C);
+	fetch_simple_variable(&dummy_var, &dummy_var_name, 1 TSRMLS_CC);
+	zend_do_end_variable_parse(&dummy_var, BP_VAR_W, 0 TSRMLS_CC);
+	zend_do_pre_incdec(&dummy_result, &dummy_var, ZEND_PRE_INC TSRMLS_CC);
+	zend_do_free(&dummy_result TSRMLS_CC);
+}
+
+void tpl_do_foreach_i_end(long foreach_idx TSRMLS_DC) /* {{{ */
+{
+	znode dummy_var_name, dummy_result, dummy_var;
+	znode dummy_var_bak, dummy_var_bak_name;
+	char buf[64];
+	uint len;
+
+	//zend_printf("end idx:%ld\n", foreach_idx);
+
+	dummy_var_bak_name.op_type = IS_CONST; 
+	Z_TYPE(dummy_var_bak_name.u.constant) = IS_STRING; 
+	len = zend_sprintf(buf, "_stupy_foreach_i_bak_%d", foreach_idx);
+	Z_STRVAL(dummy_var_bak_name.u.constant) = estrndup(buf, len);
+	Z_STRLEN(dummy_var_bak_name.u.constant) = len;
+	zend_do_begin_variable_parse(TSRMLS_C); 
+	fetch_simple_variable(&dummy_var_bak, &dummy_var_bak_name, 1 TSRMLS_CC);
+	zend_do_end_variable_parse(&dummy_var_bak, BP_VAR_R, 0 TSRMLS_CC);
+
+	dummy_var_name.op_type = IS_CONST;
+	Z_TYPE(dummy_var_name.u.constant) = IS_STRING; 
+	Z_STRVAL(dummy_var_name.u.constant) = estrndup("foreach_i", 9);
+	Z_STRLEN(dummy_var_name.u.constant) = 9;
+	zend_do_begin_variable_parse(TSRMLS_C);
+	fetch_simple_variable(&dummy_var, &dummy_var_name, 1 TSRMLS_CC);
+
+	// $foreach_i = $_stupy_foreach_i_bak_{$foreach_idx};
+	zend_do_assign(&dummy_result, &dummy_var, &dummy_var_bak TSRMLS_CC);
 	zend_do_free(&dummy_result TSRMLS_CC);
 }
 

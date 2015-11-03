@@ -15,7 +15,7 @@
 */
 
 /* $Id$ */
-#define STUPY_VERSION "1.0.0"
+#define STUPY_VERSION "1.1.0"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -32,7 +32,19 @@
 #include "tpl.h"
 #include "yaf/php_yaf.h"
 
+#ifdef ZEND_API
+#undef ZEND_API
+#endif
+#define ZEND_API
+
 ZEND_DECLARE_MODULE_GLOBALS(stupy);
+
+/* Language Scanner */
+#ifdef ZTS
+extern ts_rsrc_id tpl_language_scanner_globals_id;
+#else
+extern zend_php_scanner_globals tpl_language_scanner_globals;
+#endif
 
 const zend_function_entry stupy_functions[] = {
 	/* add module function here */
@@ -53,7 +65,7 @@ zend_module_entry stupy_module_entry = {
 	stupy_functions,
 	PHP_MINIT(stupy),
 	PHP_MSHUTDOWN(stupy),
-	PHP_RINIT(stupy),	
+	PHP_RINIT(stupy),
 	PHP_RSHUTDOWN(stupy),
 	PHP_MINFO(stupy),
 #if ZEND_MODULE_API_NO >= 20010901
@@ -73,10 +85,17 @@ END_EXTERN_C()
 // file_get_contents
 // and then 
 // parse all tags
-static void parse_sys_tags(const char *filename) 
+static void parse_sys_tags(const char *filename TSRMLS_DC)
 {
 	long size, maxsize;
 	int error = 0;
+	char *contents;
+	
+	const int S_KEY_START = 0, S_KEY_END = 1, S_CONT_START = 2;
+	int state;
+	char *tag_name, *tag_content;
+	char *p, *cur, *end;
+	char *tmp_s;
 
 	FILE *fp = VCWD_FOPEN(filename, "rb");
 	if (!fp) {
@@ -88,7 +107,7 @@ static void parse_sys_tags(const char *filename)
 	rewind(fp);
 	if (maxsize > 2097152) // 2M limit
 		maxsize = 2097152;
-	char *contents = (char *)emalloc(maxsize + 1);
+	contents = (char *)emalloc(maxsize + 1);
 	size = fread(contents, 1, maxsize, fp);
 	fclose(fp);
 	if (size < 0)
@@ -98,10 +117,9 @@ static void parse_sys_tags(const char *filename)
 	contents[size] = '\0';
 
 	// parse
-	const int S_KEY_START = 0, S_KEY_END = 1, S_CONT_START = 2;
-	int state = S_KEY_START;
-	char *tag_name, *tag_content;
-	char *p, *cur = contents, *end = contents + size - 1;
+	state = S_KEY_START;
+	cur = contents;
+	end = contents + size - 1;
 	while (cur < end) {
 		p = strstr(cur, "---");
 		if (p == NULL) {
@@ -119,7 +137,7 @@ static void parse_sys_tags(const char *filename)
 				p--;
 			*++p = '\0';
 			// add tag
-			char *tmp_s = pestrdup(tag_content, 1);
+			tmp_s = pestrdup(tag_content, 1);
 			zend_hash_update(STU_G(tpl_tags_sys), tag_name, strlen(tag_name) + 1, &tmp_s, sizeof(char *), NULL);
 			state = S_KEY_START;
 			if (cur == end) 
@@ -164,7 +182,7 @@ PHP_INI_MH(OnUpdateTplTag) {
 		while (*file == ' ' || *file == '\t') // ltrim
 			file++;
 		if (strlen(file))
-			parse_sys_tags(file);
+			parse_sys_tags(file TSRMLS_CC);
 		if (NULL == p)
 			break;
 		file = ++p;
@@ -181,8 +199,24 @@ PHP_INI_BEGIN()
 PHP_INI_END();
 /* }}} */
 
+/** {{{ 
+ */
+static void php_scanner_globals_ctor(zend_php_scanner_globals *scanner_globals_p TSRMLS_DC) /* {{{ */
+{
+    memset(scanner_globals_p, 0, sizeof(*scanner_globals_p));
+}   
+/* }}} */
+ 
 PHP_MINIT_FUNCTION(stupy)
 {
+#ifdef ZTS
+	ZEND_INIT_MODULE_GLOBALS(stupy, NULL, NULL);
+	ZEND_INIT_MODULE_GLOBALS(yaf, NULL, NULL);
+	ts_allocate_id(&tpl_language_scanner_globals_id, sizeof(zend_php_scanner_globals), (ts_allocate_ctor) php_scanner_globals_ctor, NULL);
+#else
+	php_scanner_globals_ctor(&tpl_language_scanner_globals TSRMLS_CC);
+#endif
+
 	/* add module startup here */
 	STU_MINIT(tpl);
 
@@ -243,4 +277,5 @@ PHP_MINFO_FUNCTION(stupy)
     php_info_print_table_row(2, "Version", STUPY_VERSION);
 	php_info_print_table_end();
 }
+
 
