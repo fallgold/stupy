@@ -355,3 +355,4 @@ Quick Start
 13. 已知问题
     a. 在php5.3中，render，eval时，tpl中使用了ob_start函数（包括在{? ?}或function中使用），将引起输出异常。
     
+14 tests
