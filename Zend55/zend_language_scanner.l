@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -49,6 +49,8 @@
 #include "zend_exceptions.h"
 #include "tsrm_virtual_cwd.h"
 #include "tsrm_config_common.h"
+
+
 #include "stupy.h"
 #include "stupy_compile.h"
 
@@ -56,6 +58,7 @@
 #undef ZEND_API
 #endif
 #define ZEND_API
+
 
 #define YYCTYPE   unsigned char
 #define YYFILL(n) { if ((YYCURSOR + n) >= (YYLIMIT + ZEND_MMAP_AHEAD)) { return 0; } }
@@ -106,6 +109,7 @@ ts_rsrc_id tpl_language_scanner_globals_id;
 zend_php_scanner_globals tpl_language_scanner_globals;
 # define LANG_SCNG(v) (tpl_language_scanner_globals.v)
 #endif
+
 
 #define HANDLE_NEWLINES(s, l)													\
 do {																			\
@@ -570,10 +574,9 @@ void stupy_extend_string(char *str, int len TSRMLS_DC)
 	zval zstr;
 	char *file_desc;
 	int compiler_result;
-	
+
 	zend_save_lexical_state(&original_lex_state TSRMLS_CC);
 
-	
 	Z_TYPE(zstr)   = IS_STRING;
 	Z_STRVAL(zstr) = estrndup(str, len);
 	Z_STRLEN(zstr) = len;
@@ -1592,6 +1595,8 @@ NEWLINE ("\r"|"\n"|"\r\n")
 
 
 <ST_DOUBLE_QUOTES,ST_BACKQUOTE,ST_HEREDOC,ST_TRANSLATE>"${" {
+	if (STU_G(st_tpl))
+		STU_G(st_tpl)++;
 	yy_push_state(ST_LOOKING_FOR_VARNAME TSRMLS_CC);
 	return T_DOLLAR_OPEN_CURLY_BRACES;
 }
@@ -2225,6 +2230,13 @@ inline_html:
 	return T_INLINE_HTML;
 }
 
+<ST_DOUBLE_QUOTES>"{"{LABEL}"::"("$"|[a-zA-Z_\x7f-\xff]) {
+	if (STU_G(st_tpl))
+		STU_G(st_tpl)++;
+	yy_push_state(ST_IN_SCRIPTING TSRMLS_CC);
+	yyless(1);
+	return '{';
+}
 
 /* Make sure a label character follows "->", otherwise there is no property
  * and "->" will be taken literally
@@ -2484,10 +2496,11 @@ inline_html:
 				}
 				continue;
 			case '{':
-				if (*YYCURSOR == '$') {
-					break;
-				}
-				continue;
+				break;
+				/*if (*YYCURSOR == '$') {*/
+					/*break;*/
+				/*}*/
+				/*continue;*/
 			case '\\':
 				if (YYCURSOR < YYLIMIT) {
 					YYCURSOR++;
@@ -2580,6 +2593,8 @@ inline_html:
 
 
 <ST_DOUBLE_QUOTES,ST_BACKQUOTE,ST_HEREDOC,ST_TRANSLATE>"{$" {
+	if (STU_G(st_tpl))
+		STU_G(st_tpl)++;
 	zendlval->value.lval = (long) '{';
 	yy_push_state(ST_IN_SCRIPTING TSRMLS_CC);
 	yyless(1);
@@ -2623,10 +2638,11 @@ inline_html:
 				}
 				continue;
 			case '{':
-				if (*YYCURSOR == '$') {
-					break;
-				}
-				continue;
+				break;
+				/*if (*YYCURSOR == '$') {*/
+					/*break;*/
+				/*}*/
+				/*continue;*/
 			case '\\':
 				if (YYCURSOR < YYLIMIT) {
 					YYCURSOR++;

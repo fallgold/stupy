@@ -32,6 +32,8 @@ if [ ! -d $zend ]; then
 	exit 1
 fi
 
+echo "gen $zend ..."
+
 re2c --case-inverted -cbdFt $zend/zend_language_scanner_defs.h -o $zend/zend_language_scanner.c $zend/zend_language_scanner.l
 yacc -p zend --verbose -t -d $zend/zend_language_parser.y -o $zend/zend_language_parser.c
 

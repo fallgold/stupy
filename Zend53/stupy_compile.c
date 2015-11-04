@@ -21,7 +21,7 @@
 #include "zend_language_scanner.c"
 
 
-/* zend.c */
+/************************* zend.c *************************/
 
 #if defined(__GNUC__) && __GNUC__ >= 3 && !defined(__INTEL_COMPILER) && !defined(DARWIN) && !defined(__hpux) && !defined(_AIX) && !defined(__osf__)
 void zend_error_noreturn(int type, const char *format, ...) __attribute__ ((alias("zend_error"),noreturn));
@@ -39,6 +39,7 @@ void zend_error_noreturn(int type, const char *format, ...) __attribute__ ((alia
 		} \
 	} while (0)
 
+
 #define RESTORE_STACK(stack) do { \
 		if (stack.top) { \
 			zend_stack_destroy(&CG(stack)); \
@@ -46,27 +47,6 @@ void zend_error_noreturn(int type, const char *format, ...) __attribute__ ((alia
 		} \
 	} while (0)
 
-#if defined(__GNUC__) && __GNUC__ >= 3 && !defined(__INTEL_COMPILER) && !defined(DARWIN) && !defined(__hpux) && !defined(_AIX) && !defined(__osf__)
-void zend_error_noreturn(int type, const char *format, ...) __attribute__ ((noreturn));
-#else
-#  define zend_error_noreturn zend_error
-#endif
-
-#if defined(__GNUC__) && __GNUC__ >= 3 && !defined(__INTEL_COMPILER) && !defined(DARWIN) && !defined(__hpux) && !defined(_AIX) && !defined(__osf__)
-void zend_error_noreturn(int type, const char *format, ...) __attribute__ ((alias("zend_error"),noreturn));
-#endif
-
-
-int zend_spprintf(char **message, int max_len, char *format, ...) /* {{{ */
-{
-	va_list arg;
-	int len;
-
-	va_start(arg, format);
-	len = zend_vspprintf(message, max_len, format, arg);
-	va_end(arg);
-	return len;
-}
 
 ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 {
@@ -297,17 +277,32 @@ ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 }
 /* }}} */
 
-/* this should be compatible with the standard zenderror */
-void zenderror(char *error) /* {{{ */
+#ifdef zenderror
+#undef zenderror
+#endif
+
+void zenderror(const char *error) /* {{{ */
 {
 	zend_error(E_PARSE, "%s", error);
 }
 /* }}} */
 
-/*  end zend.c  */
+
+/************************* zend_exceptions.c *************************/
 
 
-/*  zend_opcode.c  */
+int zend_spprintf(char **message, int max_len, char *format, ...) /* {{{ */
+{
+	va_list arg;
+	int len;
+
+	va_start(arg, format);
+	len = zend_vspprintf(message, max_len, format, arg);
+	va_end(arg);
+	return len;
+}
+/* }}} */
+
 zend_brk_cont_element *get_next_brk_cont_element(zend_op_array *op_array)
 {
 	op_array->last_brk_cont++;
@@ -354,10 +349,10 @@ int get_next_op_number(zend_op_array *op_array)
 {
 	return op_array->last;
 }
-/*  end zend_opcode.c  */
 
 
-/*  zend_execute_API.c  */
+/************************* zend_execute_API.c *************************/
+
 
 #define MAX_ABSTRACT_INFO_CNT 3
 #define MAX_ABSTRACT_INFO_FMT "%s%s%s%s"
@@ -372,6 +367,7 @@ typedef struct _zend_abstract_info {
 	int cnt;
 	int ctor;
 } zend_abstract_info;
+
 
 static int zend_verify_abstract_class_function(zend_function *fn, zend_abstract_info *ai TSRMLS_DC) /* {{{ */
 {
@@ -393,6 +389,7 @@ static int zend_verify_abstract_class_function(zend_function *fn, zend_abstract_
 	return 0;
 }
 /* }}} */
+
 
 void zend_verify_abstract_class(zend_class_entry *ce TSRMLS_DC) /* {{{ */
 {
@@ -416,8 +413,8 @@ void zend_verify_abstract_class(zend_class_entry *ce TSRMLS_DC) /* {{{ */
 }
 /* }}} */
 
-
 #include "zend_vm.h"
+
 void execute_new_code(TSRMLS_D) /* {{{ */
 {
 	zend_op *opline, *end;
@@ -492,13 +489,10 @@ void execute_new_code(TSRMLS_D) /* {{{ */
 }
 /* }}} */
 
-/*  end zend_execute_API.c  */
 
-
-/*  zend_list.c  */
+/************************* zend_list.c *************************/
 
 static HashTable list_destructors; // ????
-
 int zend_init_rsrc_list(TSRMLS_D)
 {
 	if (zend_hash_init(&EG(regular_list), 0, NULL, list_entry_destructor, 0)==SUCCESS) {
@@ -533,8 +527,6 @@ void list_entry_destructor(void *ptr)
 		zend_error(E_WARNING,"Unknown list entry type in request shutdown (%d)", le->type);
 	}
 }
-
-/*  end zend_list.c  */
 
 
 /*

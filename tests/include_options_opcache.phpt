@@ -1,7 +1,7 @@
 --TEST--
 Check for include_extend options with opcache
 --INI--
-zend_extension=/usr/local/lib/php/extensions/no-debug-non-zts-20131226/opcache.so
+zend_extension=/usr/lib/php/20121212-debug/opcache.so
 opcache.enable_cli=1
 opcache.revalidate_freq=0
 --SKIPIF--
@@ -9,7 +9,7 @@ opcache.revalidate_freq=0
 if (!extension_loaded("stupy")) 
 	print "skip";
 if (!extension_loaded("Zend OPcache")) {
-	print "skip opcode cache module not exist, to test include options, you should config the EXTENSIONS in .phpt file";
+	print "skip opcode cache module not exist, to test include options, you should config the EXTENSIONS in .phpt file (.e.g zend_extension=/usr/lib/php/20121212-debug/opcache.so)";
 }
 ?>
 --FILE--

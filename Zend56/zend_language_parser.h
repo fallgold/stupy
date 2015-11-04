@@ -41,7 +41,7 @@ extern int zenddebug;
 #endif
 /* "%code requires" blocks.  */
 /* Line 2053 of yacc.c  */
-#line 56 "Zend56/zend_language_parser.y"
+#line 50 "Zend56/zend_language_parser.y"
 
 #ifdef ZTS
 # define YYPARSE_PARAM tsrm_ls
@@ -190,15 +190,15 @@ extern int zenddebug;
      T_NS_C = 386,
      T_DIR = 387,
      T_NS_SEPARATOR = 388,
-     T_START_TPL = 389,
-     T_START_TPL_WITH_ECHO = 390,
-     T_START_TPL_WITH_SCRIPT = 391,
-     T_END_TPL = 392,
-     T_ATTR_FILE = 393,
-     T_IN = 394,
-     T_START_TPL_TRANSLATE = 395,
-     T_TPL_INCLUDE = 396,
-     T_ELLIPSIS = 397
+     T_ELLIPSIS = 389,
+     T_START_TPL = 390,
+     T_START_TPL_WITH_ECHO = 391,
+     T_START_TPL_WITH_SCRIPT = 392,
+     T_END_TPL = 393,
+     T_ATTR_FILE = 394,
+     T_IN = 395,
+     T_START_TPL_TRANSLATE = 396,
+     T_TPL_INCLUDE = 397
    };
 #endif
 /* Tokens.  */
@@ -334,15 +334,15 @@ extern int zenddebug;
 #define T_NS_C 386
 #define T_DIR 387
 #define T_NS_SEPARATOR 388
-#define T_START_TPL 389
-#define T_START_TPL_WITH_ECHO 390
-#define T_START_TPL_WITH_SCRIPT 391
-#define T_END_TPL 392
-#define T_ATTR_FILE 393
-#define T_IN 394
-#define T_START_TPL_TRANSLATE 395
-#define T_TPL_INCLUDE 396
-#define T_ELLIPSIS 397
+#define T_ELLIPSIS 389
+#define T_START_TPL 390
+#define T_START_TPL_WITH_ECHO 391
+#define T_START_TPL_WITH_SCRIPT 392
+#define T_END_TPL 393
+#define T_ATTR_FILE 394
+#define T_IN 395
+#define T_START_TPL_TRANSLATE 396
+#define T_TPL_INCLUDE 397
 
 
 

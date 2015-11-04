@@ -41,7 +41,7 @@ extern int zenddebug;
 #endif
 /* "%code requires" blocks.  */
 /* Line 2053 of yacc.c  */
-#line 56 "Zend55/zend_language_parser.y"
+#line 50 "Zend55/zend_language_parser.y"
 
 #ifdef ZTS
 # define YYPARSE_PARAM tsrm_ls

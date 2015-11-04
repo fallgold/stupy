@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2013 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -270,6 +270,7 @@ ZEND_API void zend_restore_lexical_state(zend_lex_state *lex_state TSRMLS_DC)
 		CG(heredoc) = NULL;
 		CG(heredoc_len) = 0;
 	}
+	RESET_DOC_COMMENT();
 }
 
 /* php.lib has exported */
@@ -554,6 +555,7 @@ ZEND_API int open_file_for_scanning(zend_file_handle *file_handle TSRMLS_DC)
 		CG(zend_lineno) = 1;
 	}
 
+	RESET_DOC_COMMENT();
 	CG(increment_lineno) = 0;
 	return SUCCESS;
 }
@@ -565,20 +567,21 @@ void stupy_extend_string(char *str, int len TSRMLS_DC)
 	zval zstr;
 	char *file_desc;
 	int compiler_result;
-	
+
 	zend_save_lexical_state(&original_lex_state TSRMLS_CC);
 
-	
 	Z_TYPE(zstr)   = IS_STRING;
 	Z_STRVAL(zstr) = estrndup(str, len);
 	Z_STRLEN(zstr) = len;
 	file_desc = zend_make_compiled_string_description("extend string" TSRMLS_CC);
 	if (zend_prepare_string_for_scanning(&zstr, file_desc TSRMLS_CC)==SUCCESS) {
 		compiler_result = zendparse(TSRMLS_C);
+#ifdef ZEND_MULTIBYTE
 		if (SCNG(script_filtered)) {
 			efree(SCNG(script_filtered));
 			SCNG(script_filtered) = NULL;
 		}
+#endif
 		if (compiler_result==1) { /* parser error */
 			zval_dtor(&zstr);
 			efree(file_desc);
@@ -618,10 +621,12 @@ int stupy_extend_file(char *filename, int type TSRMLS_DC)
 		file_ok = 0;
 	} else {
 		compiler_result = zendparse(TSRMLS_C);
+#ifdef ZEND_MULTIBYTE
 		if (SCNG(script_filtered)) {
 			efree(SCNG(script_filtered));
 			SCNG(script_filtered) = NULL;
 		}
+#endif
 		if (compiler_result==1) { /* parser error */
 			zend_bailout();
 		} else if (file_handle.handle.stream.handle) {
@@ -681,7 +686,7 @@ ZEND_API zend_op_array *stupy_compile_file(zend_file_handle *file_handle, int ty
 		compiler_result = zendparse(TSRMLS_C);
 		zend_do_return(&retval_znode, 0 TSRMLS_CC);
 		CG(in_compilation) = original_in_compilation;
-		if (compiler_result==1) { /* parser error */
+		if (compiler_result != 0) { /* parser error */
 			zend_bailout();
 		}
 		compilation_successful=1;
@@ -787,6 +792,7 @@ ZEND_API int zend_prepare_string_for_scanning(zval *str, char *filename TSRMLS_D
 	zend_set_compiled_filename(filename TSRMLS_CC);
 	CG(zend_lineno) = 1;
 	CG(increment_lineno) = 0;
+	RESET_DOC_COMMENT();
 	return SUCCESS;
 }
 
@@ -856,7 +862,7 @@ zend_op_array *stupy_compile_string(zval *source_string, char *filename TSRMLS_D
 			SCNG(script_filtered) = NULL;
 		}
 
-		if (compiler_result==1) {
+		if (compiler_result != 0) {
 			CG(active_op_array) = original_active_op_array;
 			CG(unclean_shutdown)=1;
 			destroy_op_array(op_array TSRMLS_CC);
@@ -1578,6 +1584,8 @@ NEWLINE ("\r"|"\n"|"\r\n")
 
 
 <ST_DOUBLE_QUOTES,ST_BACKQUOTE,ST_HEREDOC,ST_TRANSLATE>"${" {
+	if (STU_G(st_tpl))
+		STU_G(st_tpl)++;
 	yy_push_state(ST_LOOKING_FOR_VARNAME TSRMLS_CC);
 	return T_DOLLAR_OPEN_CURLY_BRACES;
 }
@@ -2210,6 +2218,13 @@ inline_html:
 	return T_INLINE_HTML;
 }
 
+<ST_DOUBLE_QUOTES>"{"{LABEL}"::"("$"|[a-zA-Z_\x7f-\xff]) {
+	if (STU_G(st_tpl))
+		STU_G(st_tpl)++;
+	yy_push_state(ST_IN_SCRIPTING TSRMLS_CC);
+	yyless(1);
+	return '{';
+}
 
 /* Make sure a label character follows "->", otherwise there is no property
  * and "->" will be taken literally
@@ -2469,10 +2484,11 @@ inline_html:
 				}
 				continue;
 			case '{':
-				if (*YYCURSOR == '$') {
-					break;
-				}
-				continue;
+				break;
+				/*if (*YYCURSOR == '$') {*/
+					/*break;*/
+				/*}*/
+				/*continue;*/
 			case '\\':
 				if (YYCURSOR < YYLIMIT) {
 					YYCURSOR++;
@@ -2565,6 +2581,8 @@ inline_html:
 
 
 <ST_DOUBLE_QUOTES,ST_BACKQUOTE,ST_HEREDOC,ST_TRANSLATE>"{$" {
+	if (STU_G(st_tpl))
+		STU_G(st_tpl)++;
 	zendlval->value.lval = (long) '{';
 	yy_push_state(ST_IN_SCRIPTING TSRMLS_CC);
 	yyless(1);
@@ -2608,10 +2626,11 @@ inline_html:
 				}
 				continue;
 			case '{':
-				if (*YYCURSOR == '$') {
-					break;
-				}
-				continue;
+				break;
+				/*if (*YYCURSOR == '$') {*/
+					/*break;*/
+				/*}*/
+				/*continue;*/
 			case '\\':
 				if (YYCURSOR < YYLIMIT) {
 					YYCURSOR++;

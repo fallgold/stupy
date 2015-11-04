@@ -1384,12 +1384,20 @@ STU_MINIT_FUNCTION(tpl)
 		{"radios", 
 "{? list($radio_name, $vals, $val_seleted) = $p; ?} \
 {if is_array($val_seleted)}{? list($val_name, $label_name, $val_seleted_tmp) = $val_seleted; $val_seleted = $val_seleted_tmp; ?} \
-	{foreach $vals as $item}{? $val = $item[$val_name]; $label = $item[$label_name]; ?}<li><input id=\"id_radio_{$radio_name}_{$val}\" value=\"{$val}\" type=\"radio\" name=\"{$radio_name}\" {if $val_seleted == $val} checked=\"checked\"{/if}/>\n \
-		<label for=\"id_radio_{$radio_name}_{$val}\">{$label}</label></li>\n \
+	{foreach $vals as $item}{? $val = $item[$val_name]; $label = $item[$label_name]; ?}<li><input id=\"id_radio_{$radio_name}_{$val}\" value=\"{$val}\" type=\"radio\" name=\"{$radio_name}\" {if $val_seleted == $val} checked=\"checked\"{/if}/><label for=\"id_radio_{$radio_name}_{$val}\">{$label}</label></li>\n \
 	{/foreach} \
 {else} \
-	{foreach $vals as $val => $label}<li><input id=\"id_radio_{$radio_name}_{$val}\" value=\"{$val}\" type=\"radio\" name=\"{$radio_name}\" {if $val_seleted == $val} checked=\"checked\"{/if}/>\n \
-		<label for=\"id_radio_{$radio_name}_{$val}\">{$label}</label></li>\n \
+	{foreach $vals as $val => $label}<li><input id=\"id_radio_{$radio_name}_{$val}\" value=\"{$val}\" type=\"radio\" name=\"{$radio_name}\" {if $val_seleted == $val} checked=\"checked\"{/if}/><label for=\"id_radio_{$radio_name}_{$val}\">{$label}</label></li>\n \
+	{/foreach} \
+{/if}"
+		},
+		{"ckboxes", 
+"{? list($ckbox_name, $vals, $val_seleted) = $p; ?} \
+{if is_array($val_seleted) && count($val_seleted) > 1 && is_array($val_seleted[2])}{? list($val_name, $label_name, $val_seleted_tmp) = $val_seleted; $val_seleted = $val_seleted_tmp; ?} \
+	{foreach $vals as $item}{? $val = $item[$val_name]; $label = $item[$label_name]; ?}<li><input id=\"id_ckbox_{$ckbox_name}_{$val}\" value=\"{$val}\" type=\"checkbox\" name=\"{$ckbox_name}[]\" {if in_array($val, $val_seleted)} checked=\"checked\"{/if}/><label for=\"id_ckbox_{$ckbox_name}_{$val}\">{$label}</label></li>\n \
+	{/foreach} \
+{else} \
+	{foreach $vals as $val => $label}<li><input id=\"id_ckbox_{$ckbox_name}_{$val}\" value=\"{$val}\" type=\"checkbox\" name=\"{$ckbox_name}[]\" {if in_array($val, $val_seleted)} checked=\"checked\"{/if}/><label for=\"id_ckbox_{$ckbox_name}_{$val}\">{$label}</label></li>\n \
 	{/foreach} \
 {/if}"
 		}

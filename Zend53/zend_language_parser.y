@@ -309,6 +309,8 @@ tpl_inner_tpl_attr_name:
 tpl_inner_tpl_attr_anony:
 		tpl_base_variable { zend_do_end_variable_parse(&$1, BP_VAR_R, 0 TSRMLS_CC); $$ = $1; }
 	|	common_scalar
+	|	T_ENCAPSED_AND_WHITESPACE { $$ = $1; }
+	|	'"' encaps_list	'"' { $$ = $2; }
 	|	T_ARRAY '(' array_pair_list ')' { $$ = $3; }
 ;
 
@@ -1104,6 +1106,10 @@ encaps_list:
 	|	encaps_list T_ENCAPSED_AND_WHITESPACE	{ zend_do_add_string(&$$, &$1, &$2 TSRMLS_CC); }
 	|	encaps_var { zend_do_end_variable_parse(&$1, BP_VAR_R, 0 TSRMLS_CC); zend_do_add_variable(&$$, NULL, &$1 TSRMLS_CC); }
 	|	T_ENCAPSED_AND_WHITESPACE encaps_var	{ zend_do_add_string(&$$, NULL, &$1 TSRMLS_CC); zend_do_end_variable_parse(&$2, BP_VAR_R, 0 TSRMLS_CC); zend_do_add_variable(&$$, &$$, &$2 TSRMLS_CC); }
+	|	tpl_encaps_var { zend_do_add_variable(&$$, NULL, &$1 TSRMLS_CC); }
+	|	T_ENCAPSED_AND_WHITESPACE tpl_encaps_var	{ zend_do_add_string(&$$, NULL, &$1 TSRMLS_CC); zend_do_add_variable(&$$, &$$, &$2 TSRMLS_CC); }
+	|	encaps_list tpl_encaps_var { zend_do_add_variable(&$$, &$1, &$2 TSRMLS_CC); }
+	|	T_ENCAPSED_AND_WHITESPACE T_ENCAPSED_AND_WHITESPACE	{ zend_do_add_string(&$$, NULL, &$1 TSRMLS_CC); zend_do_add_string(&$$, &$$, &$2 TSRMLS_CC); }
 ;
 
 
@@ -1115,8 +1121,12 @@ encaps_var:
 	|	T_DOLLAR_OPEN_CURLY_BRACES expr '}' { zend_do_begin_variable_parse(TSRMLS_C);  fetch_simple_variable(&$$, &$2, 1 TSRMLS_CC); }
 	|	T_DOLLAR_OPEN_CURLY_BRACES T_STRING_VARNAME '[' expr ']' '}' { zend_do_begin_variable_parse(TSRMLS_C);  fetch_array_begin(&$$, &$2, &$4 TSRMLS_CC); }
 	|	T_CURLY_OPEN variable '}' { $$ = $2; }
+	|	'{' static_member '}' { $$ = $2; $$.EA = ZEND_PARSED_STATIC_MEMBER; }
 ;
 
+tpl_encaps_var:
+		'{' class_constant '}'	{ $$ = $2; }
+;
 
 encaps_var_offset:
 		T_STRING		{ $$ = $1; }

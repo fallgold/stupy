@@ -3,7 +3,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2015 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        |
@@ -41,12 +41,6 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 
 #define YYERROR_VERBOSE
 #define YYSTYPE znode
-
-#if ((PHP_MAJOR_VERSION == 5) && (PHP_MINOR_VERSION < 4))
-#define OPLINE_NUM(var) var.u.opline_num
-#else
-#define OPLINE_NUM(var) var.u.op.opline_num
-#endif
 
 %}
 
@@ -218,6 +212,7 @@ static YYSIZE_T zend_yytnamerr(char*, const char*);
 %token T_NS_C            "__NAMESPACE__ (T_NS_C)"
 %token T_DIR             "__DIR__ (T_DIR)"
 %token T_NS_SEPARATOR    "\\ (T_NS_SEPARATOR)"
+
 %token T_START_TPL		 "tpl left delim (T_START_TPL)"
 %token T_START_TPL_WITH_ECHO		 "tpl left delim with echo (T_START_TPL_WITH_ECHO)"
 %token T_START_TPL_WITH_SCRIPT		 "tpl left delim with script (T_START_TPL_WITH_SCRIPT)"
@@ -264,10 +259,10 @@ use_declarations:
 ;
 
 use_declaration:
-		namespace_name 			{ zend_do_use(&$1, NULL, 0 TSRMLS_CC); }
-	|	namespace_name T_AS T_STRING	{ zend_do_use(&$1, &$3, 0 TSRMLS_CC); }
-	|	T_NS_SEPARATOR namespace_name { zend_do_use(&$2, NULL, 1 TSRMLS_CC); }
-	|	T_NS_SEPARATOR namespace_name T_AS T_STRING { zend_do_use(&$2, &$4, 1 TSRMLS_CC); }
+		namespace_name 			{ zend_do_use(&$1, NULL TSRMLS_CC); }
+	|	namespace_name T_AS T_STRING	{ zend_do_use(&$1, &$3 TSRMLS_CC); }
+	|	T_NS_SEPARATOR namespace_name { zend_do_use(&$2, NULL TSRMLS_CC); }
+	|	T_NS_SEPARATOR namespace_name T_AS T_STRING { zend_do_use(&$2, &$4 TSRMLS_CC); }
 ;
 
 constant_declaration:
@@ -342,6 +337,20 @@ unticked_statement:
 	|	T_GOTO T_STRING ';' { zend_do_goto(&$2 TSRMLS_CC); }
 ;
 
+catch_statement:
+				/* empty */ { $$.op_type = IS_UNUSED; }
+	|	T_CATCH '(' { zend_initialize_try_catch_element(&$1 TSRMLS_CC); } 
+		fully_qualified_class_name { zend_do_first_catch(&$2 TSRMLS_CC); }
+		T_VARIABLE ')' { zend_do_begin_catch(&$1, &$4, &$6, &$2 TSRMLS_CC); }
+		'{' inner_statement_list '}' { zend_do_end_catch(&$1 TSRMLS_CC); }
+		additional_catches { zend_do_mark_last_catch(&$2, &$13 TSRMLS_CC); $$ = $1;}
+
+finally_statement:
+					/* empty */ { $$.op_type = IS_UNUSED; }
+	|	T_FINALLY { zend_do_finally(&$1 TSRMLS_CC); } '{' inner_statement_list '}' { $$ = $1; }
+;
+
+
 tpl_block:
 		tpl_block tpl_statement
 	|	tpl_block T_INLINE_HTML	{ zend_do_echo(&$2 TSRMLS_CC); } 
@@ -371,6 +380,8 @@ tpl_inner_tpl_attr_name:
 tpl_inner_tpl_attr_anony:
 		tpl_base_variable { zend_do_end_variable_parse(&$1, BP_VAR_R, 0 TSRMLS_CC); $$ = $1; }
 	|	common_scalar
+	|	T_ENCAPSED_AND_WHITESPACE { $$ = $1; }
+	|	'"' encaps_list	'"' { $$ = $2; }
 	|	T_ARRAY '(' array_pair_list ')' { $$ = $3; }
 ;
 
@@ -446,19 +457,6 @@ tpl_statement:
 			{ znode dummy_var; tpl_do_assign(&dummy_var, &$6 TSRMLS_CC); zend_do_if_cond(&dummy_var, &$7 TSRMLS_CC); zend_do_foreach_begin(&$2, &$1, &dummy_var, &$5, 0 TSRMLS_CC); zend_do_foreach_cont(&$2, &$1, &$5, &$3, &$4 TSRMLS_CC); }
 			tpl_block T_START_TPL { zend_do_foreach_end(&$2, &$5 TSRMLS_CC); zend_do_if_after_statement(&$7, 1 TSRMLS_CC); }
 		tpl_loopelse '/' T_FOR T_END_TPL { zend_do_if_end(TSRMLS_C); }
-;
-
-catch_statement:
-				/* empty */ { $$.op_type = IS_UNUSED; }
-	|	T_CATCH '(' { zend_initialize_try_catch_element(&$1 TSRMLS_CC); } 
-		fully_qualified_class_name { zend_do_first_catch(&$2 TSRMLS_CC); }
-		T_VARIABLE ')' { zend_do_begin_catch(&$1, &$4, &$6, &$2 TSRMLS_CC); }
-		'{' inner_statement_list '}' { zend_do_end_catch(&$1 TSRMLS_CC); }
-		additional_catches { zend_do_mark_last_catch(&$2, &$13 TSRMLS_CC); $$ = $1;}
-
-finally_statement:
-					/* empty */ { $$.op_type = IS_UNUSED; }
-	|	T_FINALLY { zend_do_finally(&$1 TSRMLS_CC); } '{' inner_statement_list '}' { $$ = $1; }
 ;
 
 additional_catches:
@@ -1303,6 +1301,10 @@ encaps_list:
 	|	encaps_list T_ENCAPSED_AND_WHITESPACE	{ zend_do_add_string(&$$, &$1, &$2 TSRMLS_CC); }
 	|	encaps_var { zend_do_end_variable_parse(&$1, BP_VAR_R, 0 TSRMLS_CC); zend_do_add_variable(&$$, NULL, &$1 TSRMLS_CC); }
 	|	T_ENCAPSED_AND_WHITESPACE encaps_var	{ zend_do_add_string(&$$, NULL, &$1 TSRMLS_CC); zend_do_end_variable_parse(&$2, BP_VAR_R, 0 TSRMLS_CC); zend_do_add_variable(&$$, &$$, &$2 TSRMLS_CC); }
+	|	tpl_encaps_var { zend_do_add_variable(&$$, NULL, &$1 TSRMLS_CC); }
+	|	T_ENCAPSED_AND_WHITESPACE tpl_encaps_var	{ zend_do_add_string(&$$, NULL, &$1 TSRMLS_CC); zend_do_add_variable(&$$, &$$, &$2 TSRMLS_CC); }
+	|	encaps_list tpl_encaps_var { zend_do_add_variable(&$$, &$1, &$2 TSRMLS_CC); }
+	|	T_ENCAPSED_AND_WHITESPACE T_ENCAPSED_AND_WHITESPACE	{ zend_do_add_string(&$$, NULL, &$1 TSRMLS_CC); zend_do_add_string(&$$, &$$, &$2 TSRMLS_CC); }
 ;
 
 
@@ -1314,8 +1316,12 @@ encaps_var:
 	|	T_DOLLAR_OPEN_CURLY_BRACES expr '}' { zend_do_begin_variable_parse(TSRMLS_C);  fetch_simple_variable(&$$, &$2, 1 TSRMLS_CC); }
 	|	T_DOLLAR_OPEN_CURLY_BRACES T_STRING_VARNAME '[' expr ']' '}' { zend_do_begin_variable_parse(TSRMLS_C);  fetch_array_begin(&$$, &$2, &$4 TSRMLS_CC); }
 	|	T_CURLY_OPEN variable '}' { $$ = $2; }
+	|	'{' static_member '}' { $$ = $2; $$.EA = ZEND_PARSED_STATIC_MEMBER; }
 ;
 
+tpl_encaps_var:
+		'{' class_constant '}'	{ $$ = $2; }
+;
 
 encaps_var_offset:
 		T_STRING		{ $$ = $1; }

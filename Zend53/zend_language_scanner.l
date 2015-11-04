@@ -1430,6 +1430,8 @@ NEWLINE ("\r"|"\n"|"\r\n")
 
 
 <ST_DOUBLE_QUOTES,ST_BACKQUOTE,ST_HEREDOC,ST_TRANSLATE>"${" {
+	if (STU_G(st_tpl))
+		STU_G(st_tpl)++;
 	yy_push_state(ST_LOOKING_FOR_VARNAME TSRMLS_CC);
 	return T_DOLLAR_OPEN_CURLY_BRACES;
 }
@@ -2016,6 +2018,13 @@ inline_html:
 	return T_INLINE_HTML;
 }
 
+<ST_DOUBLE_QUOTES>"{"{LABEL}"::"("$"|[a-zA-Z_\x7f-\xff]) {
+	if (STU_G(st_tpl))
+		STU_G(st_tpl)++;
+	yy_push_state(ST_IN_SCRIPTING TSRMLS_CC);
+	yyless(1);
+	return '{';
+}
 
 /* Make sure a label character follows "->", otherwise there is no property
  * and "->" will be taken literally
@@ -2277,10 +2286,11 @@ inline_html:
 				}
 				continue;
 			case '{':
-				if (*YYCURSOR == '$') {
-					break;
-				}
-				continue;
+				break;
+				/*if (*YYCURSOR == '$') {*/
+					/*break;*/
+				/*}*/
+				/*continue;*/
 			case '\\':
 				if (YYCURSOR < YYLIMIT) {
 					YYCURSOR++;
@@ -2373,6 +2383,8 @@ inline_html:
 
 
 <ST_DOUBLE_QUOTES,ST_BACKQUOTE,ST_HEREDOC,ST_TRANSLATE>"{$" {
+	if (STU_G(st_tpl))
+		STU_G(st_tpl)++;
 	zendlval->value.lval = (long) '{';
 	yy_push_state(ST_IN_SCRIPTING TSRMLS_CC);
 	yyless(1);
@@ -2416,10 +2428,11 @@ inline_html:
 				}
 				continue;
 			case '{':
-				if (*YYCURSOR == '$') {
-					break;
-				}
-				continue;
+				break;
+				/*if (*YYCURSOR == '$') {*/
+					/*break;*/
+				/*}*/
+				/*continue;*/
 			case '\\':
 				if (YYCURSOR < YYLIMIT) {
 					YYCURSOR++;

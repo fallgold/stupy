@@ -2,7 +2,7 @@
    +----------------------------------------------------------------------+
    | Zend Engine                                                          |
    +----------------------------------------------------------------------+
-   | Copyright (c) 1998-2013 Zend Technologies Ltd. (http://www.zend.com) |
+   | Copyright (c) 1998-2014 Zend Technologies Ltd. (http://www.zend.com) |
    +----------------------------------------------------------------------+
    | This source file is subject to version 2.00 of the Zend license,     |
    | that is bundled with this package in the file LICENSE, and is        | 
@@ -27,7 +27,7 @@
 #include "zend_API.h"
 #include "zend_exceptions.h"
 #include "tsrm_virtual_cwd.h"
-#include "zend_multibyte.h"
+
 #include "zend_language_scanner.h"
 #include "stupy.h"
 #include "stupy_compile.h"
@@ -53,6 +53,10 @@ extern zend_php_scanner_globals tpl_language_scanner_globals;
 #undef ZEND_API
 #endif
 #define ZEND_API
+
+#ifdef ZEND_MULTIBYTE
+#include "zend_multibyte.h"
+#endif /* ZEND_MULTIBYTE */
 
 #define CONSTANT_EX(op_array, op) \
 	(op_array)->literals[op].constant
@@ -930,6 +934,7 @@ static zend_bool opline_is_fetch_this(const zend_op *opline TSRMLS_DC) /* {{{ */
 {
 	if ((opline->opcode == ZEND_FETCH_W) && (opline->op1_type == IS_CONST)
 		&& (Z_TYPE(CONSTANT(opline->op1.constant)) == IS_STRING)
+		&& ((opline->extended_value & ZEND_FETCH_STATIC_MEMBER) != ZEND_FETCH_STATIC_MEMBER)
 		&& (Z_HASH_P(&CONSTANT(opline->op1.constant)) == THIS_HASHVAL)
 		&& (Z_STRLEN(CONSTANT(opline->op1.constant)) == (sizeof("this")-1))
 		&& !memcmp(Z_STRVAL(CONSTANT(opline->op1.constant)), "this", sizeof("this"))) {
@@ -1748,7 +1753,7 @@ void zend_do_begin_function_declaration(znode *function_token, znode *function_n
 	}
 
 	{
-		/* Push a seperator to the switch and foreach stacks */
+		/* Push a separator to the switch and foreach stacks */
 		zend_switch_entry switch_entry;
 
 		switch_entry.cond.op_type = IS_UNUSED;
@@ -1842,7 +1847,7 @@ void zend_do_end_function_declaration(const znode *function_token TSRMLS_DC) /* 
 	CG(active_op_array) = function_token->u.op_array;
 
 
-	/* Pop the switch and foreach seperators */
+	/* Pop the switch and foreach separators */
 	zend_stack_del_top(&CG(switch_cond_stack));
 	zend_stack_del_top(&CG(foreach_copy_stack));
 }
@@ -2640,7 +2645,7 @@ static int generate_free_foreach_copy(const zend_op *foreach_copy TSRMLS_DC) /* 
 {
 	zend_op *opline;
 
-	/* If we reach the seperator then stop applying the stack */
+	/* If we reach the separator then stop applying the stack */
 	if (foreach_copy->result_type == IS_UNUSED && foreach_copy->op1_type == IS_UNUSED) {
 		return 1;
 	}
@@ -3205,8 +3210,11 @@ static char * zend_get_function_declaration(zend_function *fptr TSRMLS_DC) /* {{
 						*zv = *precv->op2.zv;
 						zval_copy_ctor(zv);
 						INIT_PZVAL(zv);
-						zval_update_constant_ex(&zv, (void*)1, fptr->common.scope TSRMLS_CC);
-						if (Z_TYPE_P(zv) == IS_BOOL) {
+						if ((Z_TYPE_P(zv) & IS_CONSTANT_TYPE_MASK) == IS_CONSTANT) {
+							REALLOC_BUF_IF_EXCEED(buf, offset, length, Z_STRLEN_P(zv));
+							memcpy(offset, Z_STRVAL_P(zv), Z_STRLEN_P(zv));
+							offset += Z_STRLEN_P(zv);
+						} else if (Z_TYPE_P(zv) == IS_BOOL) {
 							if (Z_LVAL_P(zv)) {
 								memcpy(offset, "true", 4);
 								offset += 4;
@@ -3228,7 +3236,7 @@ static char * zend_get_function_declaration(zend_function *fptr TSRMLS_DC) /* {{
 								*(offset++) = '.';
 							}
 							*(offset++) = '\'';
-						} else if (Z_TYPE_P(zv) == IS_ARRAY) {
+						} else if (Z_TYPE_P(zv) == IS_ARRAY || (Z_TYPE_P(zv) & IS_CONSTANT_TYPE_MASK) == IS_CONSTANT_ARRAY) {
 							memcpy(offset, "Array", 5);
 							offset += 5;
 						} else {
@@ -3323,11 +3331,11 @@ static void do_inheritance_check_on_method(zend_function *child, zend_function *
 
 	if (child->common.prototype && (child->common.prototype->common.fn_flags & ZEND_ACC_ABSTRACT)) {
 		if (!zend_do_perform_implementation_check(child, child->common.prototype TSRMLS_CC)) {
-			zend_error(E_COMPILE_ERROR, "Declaration of %s::%s() must be compatible with %s", ZEND_FN_SCOPE_NAME(child), child->common.function_name, zend_get_function_declaration(child->common.prototype? child->common.prototype : parent TSRMLS_CC)); 
+			zend_error(E_COMPILE_ERROR, "Declaration of %s::%s() must be compatible with %s", ZEND_FN_SCOPE_NAME(child), child->common.function_name, zend_get_function_declaration(child->common.prototype TSRMLS_CC)); 
 		}
 	} else if (EG(error_reporting) & E_STRICT || EG(user_error_handler)) { /* Check E_STRICT (or custom error handler) before the check so that we save some time */
 		if (!zend_do_perform_implementation_check(child, parent TSRMLS_CC)) {
-			char *method_prototype = zend_get_function_declaration(child->common.prototype? child->common.prototype : parent TSRMLS_CC);
+			char *method_prototype = zend_get_function_declaration(parent TSRMLS_CC);
 			zend_error(E_STRICT, "Declaration of %s::%s() should be compatible with %s", ZEND_FN_SCOPE_NAME(child), child->common.function_name, method_prototype); 
 			efree(method_prototype);
 		}
@@ -3800,7 +3808,7 @@ static void zend_add_trait_method(zend_class_entry *ce, const char *name, const 
 #endif
 		} else {
 			/* inherited members are overridden by members inserted by traits */
-			/* check whether the trait method fullfills the inheritance requirements */
+			/* check whether the trait method fulfills the inheritance requirements */
 			do_inheritance_check_on_method(fn, existing_fn TSRMLS_CC);
 		}
 	}
@@ -3967,7 +3975,7 @@ static void zend_traits_init_trait_structures(zend_class_entry *ce TSRMLS_DC) /*
 				/** With the other traits, we are more permissive.
 					We do not give errors for those. This allows to be more
 					defensive in such definitions.
-					However, we want to make sure that the insteadof declartion
+					However, we want to make sure that the insteadof declaration
 					is consistent in itself.
 				 */
 				j = 0;
@@ -5540,7 +5548,7 @@ void zend_do_shell_exec(znode *result, const znode *cmd TSRMLS_DC) /* {{{ */
 			break;
 	}
 	SET_NODE(opline->op1, cmd);
-	opline->op2.opline_num = 0;
+	opline->op2.opline_num = 1;
 	opline->extended_value = ZEND_DO_FCALL;
 	SET_UNUSED(opline->op2);
 
@@ -7004,7 +7012,7 @@ ZEND_API size_t __xxx_zend_dirname(char *path, size_t len) // php.lib has export
 	}
 #elif defined(NETWARE)
 	/*
-	 * Find the first occurence of : from the left 
+	 * Find the first occurrence of : from the left
 	 * move the path pointer to the position just after :
 	 * increment the len_adjust to the length of path till colon character(inclusive)
 	 * If there is no character beyond : simple return len
@@ -7303,7 +7311,7 @@ void tpl_do_foreach_i_end(long foreach_idx TSRMLS_DC) /* {{{ */
 	char buf[64];
 	uint len;
 
-	//zend_printf("end idx:%ld\n", foreach_idx);
+	//zend_printf("end idx:%ld\n", foreach_idx);	
 
 	dummy_var_bak_name.op_type = IS_CONST; 
 	Z_TYPE(dummy_var_bak_name.u.constant) = IS_STRING; 

@@ -39,6 +39,18 @@
 #if YYDEBUG
 extern int zenddebug;
 #endif
+/* "%code requires" blocks.  */
+/* Line 2053 of yacc.c  */
+#line 60 "Zend54/zend_language_parser.y"
+
+#ifdef ZTS
+# define YYPARSE_PARAM tsrm_ls
+# define YYLEX_PARAM tsrm_ls
+#endif
+
+
+/* Line 2053 of yacc.c  */
+#line 54 "Zend54/zend_language_parser.h"
 
 /* Tokens.  */
 #ifndef YYTOKENTYPE
