@@ -1121,7 +1121,7 @@ encaps_var:
 	|	T_DOLLAR_OPEN_CURLY_BRACES expr '}' { zend_do_begin_variable_parse(TSRMLS_C);  fetch_simple_variable(&$$, &$2, 1 TSRMLS_CC); }
 	|	T_DOLLAR_OPEN_CURLY_BRACES T_STRING_VARNAME '[' expr ']' '}' { zend_do_begin_variable_parse(TSRMLS_C);  fetch_array_begin(&$$, &$2, &$4 TSRMLS_CC); }
 	|	T_CURLY_OPEN variable '}' { $$ = $2; }
-	|	'{' static_member '}' { $$ = $2; $$.EA = ZEND_PARSED_STATIC_MEMBER; }
+	|	'{' static_member '}' { $$ = $2; $$.u.EA.type = ZEND_PARSED_STATIC_MEMBER; }
 ;
 
 tpl_encaps_var:

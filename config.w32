@@ -1,0 +1,6 @@
+ARG_ENABLE("stupy", "for stupy support", "no");
+
+if (PHP_STUPY != "no") {
+	EXTENSION("stupy", "stupy.c Zend54\\stupy_compile.c tpl.c", true, "-Iext/stupy/ -Iext/stupy/Zend54");
+}
+

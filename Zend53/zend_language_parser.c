@@ -6657,7 +6657,7 @@ yyreduce:
   case 525:
 /* Line 1787 of yacc.c  */
 #line 1124 "Zend53/zend_language_parser.y"
-    { (yyval) = (yyvsp[(2) - (3)]); (yyval).EA = ZEND_PARSED_STATIC_MEMBER; }
+    { (yyval) = (yyvsp[(2) - (3)]); (yyval).u.EA.type = ZEND_PARSED_STATIC_MEMBER; }
     break;
 
   case 526:

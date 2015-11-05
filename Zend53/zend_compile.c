@@ -5701,6 +5701,11 @@ void tpl_do_foreach_i_init(long foreach_idx TSRMLS_DC) /* {{{ */
 	zend_do_free(&dummy_result TSRMLS_CC);
 
 	// 前面赋值的时候已经 parse end, 重新 parse
+#if ((PHP_MAJOR_VERSION == 5) && (PHP_MINOR_VERSION < 4))
+	// fix php 5.3 error
+	Z_STRVAL(dummy_var_name.u.constant) = estrndup("foreach_i", 9);
+	Z_STRLEN(dummy_var_name.u.constant) = 9;
+#endif
 	zend_do_begin_variable_parse(TSRMLS_C);
 	fetch_simple_variable(&dummy_var, &dummy_var_name, 1 TSRMLS_CC);
 

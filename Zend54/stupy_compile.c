@@ -17,6 +17,11 @@
 /* $Id$ */
 
 #include "zend_compile.c"
+
+#ifdef zenderror
+#undef zenderror
+#endif
+
 #include "zend_language_parser.c"
 #include "zend_language_scanner.c"
 
@@ -295,10 +300,6 @@ ZEND_API void zend_error(int type, const char *format, ...) /* {{{ */
 	}
 }
 /* }}} */
-
-#ifdef zenderror
-#undef zenderror
-#endif
 
 void zenderror(const char *error) /* {{{ */
 {
